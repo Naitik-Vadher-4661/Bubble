@@ -93,9 +93,9 @@ bool VaultDatabase::createTables()
             parent_id   INTEGER DEFAULT 0,
             pw_hash     BLOB NOT NULL,
             pw_salt     BLOB NOT NULL,
-            enc_key     BLOB NOT NULL,
-            enc_iv      BLOB NOT NULL,
-            enc_salt    BLOB NOT NULL,
+            enc_key     BLOB,
+            enc_iv      BLOB,
+            enc_salt    BLOB,
             original_perms TEXT,
             locked_at   INTEGER NOT NULL,
             is_own_password INTEGER DEFAULT 0

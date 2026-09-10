@@ -43,6 +43,9 @@ Bubble is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
 - [Installation](#installation)
   - [One-liner install](#one-liner-install)
   - [Manual install](#manual-install)
+- [Updating](#updating)
+  - [One-liner update](#one-liner-update)
+  - [Local update](#local-update)
 - [Keyboard shortcuts](#keyboard-shortcuts)
   - [Navigation](#navigation)
   - [Views](#views-1)
@@ -140,6 +143,10 @@ cd Bubble
 ```
 
 **Installer Options:**
+- Automatically install missing dependencies without prompting:
+  ```bash
+  ./install.sh -y
+  ```
 - Install system-wide to `/usr/local` (requires sudo):
   ```bash
   sudo ./install.sh --system
@@ -147,6 +154,10 @@ cd Bubble
 - Custom installation prefix:
   ```bash
   ./install.sh --prefix /opt/bubble
+  ```
+- Skip dependency check:
+  ```bash
+  ./install.sh --no-deps
   ```
 - Clean uninstall:
   ```bash
@@ -226,6 +237,41 @@ This installs:
 - Desktop entry to `/usr/local/share/applications/io.github.soyeb_jim285.Bubble.desktop`
 - SVG icon to `/usr/local/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg`
 - Themes and QML assets to `/usr/local/share/bubble/`
+
+---
+
+## Updating
+
+### One-Liner Update
+
+Update an existing installation to the latest version directly from your terminal:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/update.sh | bash
+```
+
+### Local Update
+
+If you cloned the repository locally, pull updates, sync submodules, and rebuild:
+
+```bash
+cd Bubble
+./update.sh
+```
+
+**Updater Options:**
+- Check for updates without applying:
+  ```bash
+  ./update.sh --check
+  ```
+- Force a clean rebuild and reinstall:
+  ```bash
+  ./update.sh --rebuild
+  ```
+- Update a system-wide installation (`/usr/local`):
+  ```bash
+  sudo ./update.sh --system
+  ```
 
 ---
 

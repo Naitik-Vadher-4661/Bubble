@@ -19,6 +19,8 @@ private slots:
     void testVaultDatabaseCrud();
     void testVaultServiceLockUnlockFile();
     void testVaultServiceChangePassword();
+    void testVaultServiceLockUnlockDirectory();
+    void testVaultServiceSessionFolder();
 };
 
 void TestVault::testCryptoEngineHashVerify()
@@ -265,6 +267,95 @@ void TestVault::testVaultServiceChangePassword()
         QCOMPARE(f.readAll(), content);
         f.close();
     }
+}
+
+void TestVault::testVaultServiceLockUnlockDirectory()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    QString configDir = tempDir.filePath("config");
+    QString secretFolder = tempDir.filePath("secret_folder");
+    QDir().mkpath(secretFolder);
+
+    QString file1 = secretFolder + "/doc1.txt";
+    QString file2 = secretFolder + "/doc2.txt";
+
+    QByteArray c1 = "Secret document one";
+    QByteArray c2 = "Secret document two";
+
+    {
+        QFile f1(file1);
+        QVERIFY(f1.open(QIODevice::WriteOnly));
+        f1.write(c1);
+        f1.close();
+
+        QFile f2(file2);
+        QVERIFY(f2.open(QIODevice::WriteOnly));
+        f2.write(c2);
+        f2.close();
+    }
+
+    VaultService vault(configDir);
+
+    // Lock the directory
+    QVERIFY(vault.lockItem(secretFolder, "FolderSecret456"));
+    QVERIFY(vault.isLocked(secretFolder));
+    QVERIFY(vault.isLocked(file1));
+    QVERIFY(vault.isLocked(file2));
+
+    // Files inside must be encrypted
+    {
+        QFile fDir(secretFolder);
+        fDir.setPermissions(QFileDevice::ReadOwner | QFileDevice::ExeOwner);
+        QFile f1(file1);
+        f1.setPermissions(QFileDevice::ReadOwner);
+        QVERIFY(f1.open(QIODevice::ReadOnly));
+        QVERIFY(f1.readAll() != c1);
+        f1.close();
+        fDir.setPermissions(QFileDevice::Permissions{});
+    }
+
+    // Unlock directory
+    QVERIFY(vault.unlockItem(secretFolder, "FolderSecret456"));
+    QVERIFY(!vault.isLocked(secretFolder));
+    QVERIFY(!vault.isLocked(file1));
+    QVERIFY(!vault.isLocked(file2));
+
+    // Plaintext content restored
+    {
+        QFile f1(file1);
+        QVERIFY(f1.open(QIODevice::ReadOnly));
+        QCOMPARE(f1.readAll(), c1);
+        f1.close();
+
+        QFile f2(file2);
+        QVERIFY(f2.open(QIODevice::ReadOnly));
+        QCOMPARE(f2.readAll(), c2);
+        f2.close();
+    }
+}
+
+void TestVault::testVaultServiceSessionFolder()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    QString configDir = tempDir.filePath("config");
+    QString secretFolder = tempDir.filePath("session_folder");
+    QDir().mkpath(secretFolder);
+
+    VaultService vault(configDir);
+    QVERIFY(vault.lockItem(secretFolder, "SessionSecret"));
+    QVERIFY(vault.isLocked(secretFolder));
+    QVERIFY(!vault.isSessionUnlocked(secretFolder));
+
+    // Session unlock
+    QVERIFY(vault.sessionUnlockFolder(secretFolder, "SessionSecret"));
+    QVERIFY(vault.isSessionUnlocked(secretFolder));
+
+    // Relock session
+    vault.sessionRelockFolder(secretFolder);
+    QVERIFY(!vault.isSessionUnlocked(secretFolder));
+    QVERIFY(vault.isLocked(secretFolder));
 }
 
 QTEST_MAIN(TestVault)

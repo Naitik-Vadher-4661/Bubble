@@ -34,6 +34,10 @@ MODE="user"
 CUSTOM_PREFIX=""
 BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/build}"
 BUILD_TYPE="Release"
+CHECK_DEPS=1
+AUTO_YES=0
+UNINSTALL=0
+FORCE_REBUILD=0
 
 print_usage() {
     cat <<USAGE
@@ -49,6 +53,8 @@ Options:
   --build-dir <dir>   Specify build directory (default: ./build)
   --debug             Build in Debug mode instead of Release
   --rebuild           Force clean build before installing
+  --no-deps           Skip dependency detection and package installation
+  -y, --yes           Automatically install missing dependencies without prompting
   --uninstall         Uninstall Bubble from target prefix
   -h, --help          Show this help message
 
@@ -58,10 +64,6 @@ Examples:
   ./install.sh --uninstall        # Removes from ~/.local
 USAGE
 }
-
-# Parse arguments
-UNINSTALL=0
-FORCE_REBUILD=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -95,6 +97,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --rebuild)
             FORCE_REBUILD=1
+            shift
+            ;;
+        --no-deps)
+            CHECK_DEPS=0
+            shift
+            ;;
+        -y|--yes)
+            AUTO_YES=1
             shift
             ;;
         --uninstall)
@@ -146,6 +156,10 @@ if [[ $UNINSTALL -eq 1 ]]; then
     rm -f "$PREFIX/share/libalpm/hooks/bubble-cleanup.hook"
     rm -f "$PREFIX/share/polkit-1/actions/org.bubble.vault.policy"
 
+    if [[ -f "/usr/share/polkit-1/actions/org.bubble.vault.policy" && $EUID -eq 0 ]]; then
+        rm -f "/usr/share/polkit-1/actions/org.bubble.vault.policy"
+    fi
+
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache -f -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true
     fi
@@ -174,21 +188,174 @@ if [[ "$MODE" == "system" || "$PREFIX" == /usr* || "$PREFIX" == /opt* ]]; then
     fi
 fi
 
-# Check essential build dependencies
-for tool in cmake ninja git; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-        echo "Error: Required tool '$tool' is not installed." >&2
+# ==============================================================================
+# Dependency Checking and Auto-Installation
+# ==============================================================================
+detect_missing_dependencies() {
+    local missing=()
+
+    # Core build tools
+    for tool in cmake git; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            missing+=("$tool")
+        fi
+    done
+
+    # Ninja
+    if ! command -v ninja >/dev/null 2>&1 && ! command -v ninja-build >/dev/null 2>&1; then
+        missing+=("ninja")
+    fi
+
+    # Pkg-config
+    if ! command -v pkg-config >/dev/null 2>&1 && ! command -v pkgconf >/dev/null 2>&1; then
+        missing+=("pkg-config")
+    fi
+
+    # Compiler
+    if ! command -v g++ >/dev/null 2>&1 && ! command -v clang++ >/dev/null 2>&1; then
+        missing+=("c++-compiler")
+    fi
+
+    # Libraries check via pkg-config if available
+    local PKG_CMD=""
+    if command -v pkgconf >/dev/null 2>&1; then
+        PKG_CMD="pkgconf"
+    elif command -v pkg-config >/dev/null 2>&1; then
+        PKG_CMD="pkg-config"
+    fi
+
+    if [[ -n "$PKG_CMD" ]]; then
+        if ! "$PKG_CMD" --exists gio-2.0 gio-unix-2.0 2>/dev/null; then
+            missing+=("gio-2.0")
+        fi
+        if ! "$PKG_CMD" --exists libargon2 2>/dev/null; then
+            missing+=("libargon2")
+        fi
+        if ! "$PKG_CMD" --exists openssl 2>/dev/null; then
+            missing+=("openssl")
+        fi
+    else
+        missing+=("gio-2.0" "libargon2" "openssl")
+    fi
+
+    # Qt6 Core / Quick
+    if ! cmake --find-package -DNAME=Qt6Core -DCOMPILER_ID=GNU -DLANGUAGE=CXX -DMODE=EXIST >/dev/null 2>&1 \
+       && ! cmake --find-package -DNAME=Qt6Core -DCOMPILER_ID=Clang -DLANGUAGE=CXX -DMODE=EXIST >/dev/null 2>&1 \
+       && ! command -v qmake6 >/dev/null 2>&1; then
+        if [[ ! -d "/usr/lib/cmake/Qt6" && ! -d "/usr/lib64/cmake/Qt6" && ! -d "/usr/local/lib/cmake/Qt6" ]]; then
+            missing+=("qt6")
+        fi
+    fi
+
+    echo "${missing[@]:-}"
+}
+
+install_distro_dependencies() {
+    local OS_ID=""
+    local OS_LIKE=""
+    if [[ -f /etc/os-release ]]; then
+        # shellcheck disable=SC1091
+        source /etc/os-release
+        OS_ID="${ID:-}"
+        OS_LIKE="${ID_LIKE:-}"
+    fi
+
+    local install_cmd=""
+    local pkg_list=""
+
+    if [[ "$OS_ID" =~ (arch|cachyos|manjaro|endeavouros|artix|garuda) || "$OS_LIKE" =~ arch ]]; then
+        install_cmd="pacman -S --needed"
+        pkg_list="cmake ninja git pkgconf gcc qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils openssl argon2"
+    elif [[ "$OS_ID" =~ (debian|ubuntu|linuxmint|pop|elementary|zorin|kali) || "$OS_LIKE" =~ (debian|ubuntu) ]]; then
+        install_cmd="apt-get install -y"
+        pkg_list="cmake ninja-build git pkg-config g++ qt6-base-dev qt6-declarative-dev libqt6svg6-dev qt6-wayland libglib2.0-dev xdg-utils libssl-dev libargon2-dev libqt6sql6-sqlite"
+    elif [[ "$OS_ID" =~ (fedora|rhel|centos|rocky|alma) || "$OS_LIKE" =~ (fedora|rhel) ]]; then
+        install_cmd="dnf install -y"
+        pkg_list="cmake ninja-build git pkgconf-pkg-config gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtwayland glib2-devel xdg-utils openssl-devel libargon2-devel qt6-qtbase-sqlite"
+    elif [[ "$OS_ID" =~ opensuse || "$OS_LIKE" =~ (suse|opensuse) ]]; then
+        install_cmd="zypper install -y"
+        pkg_list="cmake ninja git pkgconf gcc-c++ qt6-base-devel qt6-declarative-devel libqt6svg6-devel libQt6WaylandClient6 glib2-devel xdg-utils libopenssl-devel libargon2-devel"
+    elif [[ "$OS_ID" == "void" ]]; then
+        install_cmd="xbps-install -S -y"
+        pkg_list="cmake ninja git pkg-config gcc qt6-base-devel qt6-declarative-devel qt6-svg-devel qt6-wayland-devel glib-devel openssl-devel libargon2-devel"
+    else
+        echo "Warning: Could not automatically identify your Linux distribution ($OS_ID)." >&2
+        return 1
+    fi
+
+    echo "==> Required packages for your distribution ($OS_ID):"
+    echo "    $pkg_list"
+    echo
+
+    local do_install=0
+    if [[ $AUTO_YES -eq 1 ]]; then
+        do_install=1
+    elif [[ -t 0 || -c /dev/tty ]]; then
+        local reply=""
+        if [[ -t 0 ]]; then
+            read -r -p "==> Install missing packages automatically with sudo? [Y/n] " reply
+        elif [[ -c /dev/tty ]]; then
+            read -r -p "==> Install missing packages automatically with sudo? [Y/n] " reply </dev/tty
+        fi
+        if [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]; then
+            do_install=1
+        fi
+    fi
+
+    if [[ $do_install -eq 1 ]]; then
+        echo "==> Installing dependencies..."
+        if [[ $EUID -eq 0 ]]; then
+            $install_cmd $pkg_list
+        else
+            sudo $install_cmd $pkg_list
+        fi
+        return 0
+    else
+        echo "==> Please install the required dependencies manually using:"
+        if [[ $EUID -eq 0 ]]; then
+            echo "    $install_cmd $pkg_list"
+        else
+            echo "    sudo $install_cmd $pkg_list"
+        fi
         exit 1
     fi
-done
+}
 
-# Ensure git submodules are checked out
-if [[ -f ".gitmodules" ]]; then
-    echo "==> Checking git submodules (icons and UI components)..."
+if [[ $CHECK_DEPS -eq 1 ]]; then
+    echo "==> Checking build dependencies..."
+    MISSING_RAW="$(detect_missing_dependencies)"
+    if [[ -n "$MISSING_RAW" ]]; then
+        echo "==> Detected missing dependencies: $MISSING_RAW"
+        install_distro_dependencies
+    else
+        echo "==> All required build dependencies are satisfied."
+    fi
+fi
+
+# ==============================================================================
+# Submodule Verification & Recovery
+# ==============================================================================
+echo "==> Verifying UI submodules (Quill & icons)..."
+if [[ -d "$SCRIPT_DIR/.git" ]]; then
     git submodule update --init --recursive
 fi
 
+# Fallback in case submodules weren't cloned recursively or .git is missing
+if [[ ! -f "$SCRIPT_DIR/src/qml/Quill/qmldir" ]]; then
+    echo "==> Fetching Quill UI components..."
+    rm -rf "$SCRIPT_DIR/src/qml/Quill"
+    git clone --depth 1 https://github.com/soyeb-jim285/quill.git "$SCRIPT_DIR/src/qml/Quill"
+fi
+
+if [[ ! -f "$SCRIPT_DIR/src/qml/icons/qmldir" ]]; then
+    echo "==> Fetching icon set components..."
+    rm -rf "$SCRIPT_DIR/src/qml/icons"
+    git clone --depth 1 https://github.com/soyeb-jim285/quill-icons.git "$SCRIPT_DIR/src/qml/icons"
+fi
+
+# ==============================================================================
 # Configure & Build
+# ==============================================================================
 if [[ $FORCE_REBUILD -eq 1 && -d "$BUILD_DIR" ]]; then
     echo "==> Cleaning existing build directory..."
     rm -rf "$BUILD_DIR"
@@ -218,6 +385,13 @@ if [[ -f "$SCRIPT_DIR/bubble.desktop" ]]; then
     install -Dm644 "$SCRIPT_DIR/bubble.desktop" "$PREFIX/share/applications/bubble.desktop"
 fi
 
+# Polkit policy for system installations
+if [[ "$MODE" == "system" || "$PREFIX" == /usr* ]]; then
+    if [[ -d "/usr/share/polkit-1/actions" && $EUID -eq 0 ]]; then
+        install -Dm644 "$SCRIPT_DIR/dist/org.bubble.vault.policy" "/usr/share/polkit-1/actions/org.bubble.vault.policy" 2>/dev/null || true
+    fi
+fi
+
 # Update desktop and icon databases if available
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -f -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true
@@ -231,6 +405,7 @@ echo "=============================================="
 echo "    Bubble has been successfully installed!   "
 echo "=============================================="
 echo " Binary installed to: $PREFIX/bin/bubble"
+echo " Vault cleanup binary: $PREFIX/bin/bubble-vault-destroy"
 echo " Legacy alias:        $PREFIX/bin/hyprfm"
 echo " Desktop file:        $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
 echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
@@ -238,7 +413,7 @@ echo
 
 # Path check for user mode
 if [[ "$MODE" == "user" && ":$PATH:" != *":$PREFIX/bin:"* ]]; then
-    echo "NOTE: '$PREFIX/bin' does not seem to be in your current PATH."
+    echo "NOTE: '$PREFIX/bin' is not in your PATH."
     echo "To run 'bubble' from any terminal, add this to your ~/.bashrc or ~/.zshrc:"
     echo
     echo "  export PATH=\"$PREFIX/bin:\$PATH\""
