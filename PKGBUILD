@@ -4,7 +4,7 @@ pkgver=r198.g53be041
 pkgrel=1
 pkgdesc="A lightweight Qt6/QML file manager for Hyprland"
 arch=('x86_64' 'aarch64')
-url="https://github.com/soyeb-jim285/bubble"
+url="https://github.com/TattvaOrg/Bubble"
 license=('MIT')
 depends=(
     'glib2'
@@ -39,7 +39,7 @@ optdepends=(
 provides=('bubble' 'hyprfm')
 conflicts=('bubble' 'hyprfm')
 source=(
-    "${pkgname}::git+https://github.com/soyeb-jim285/bubble.git"
+    "${pkgname}::git+https://github.com/TattvaOrg/Bubble.git"
     "quill-icons::git+https://github.com/soyeb-jim285/quill-icons.git"
     "quill::git+https://github.com/soyeb-jim285/quill.git"
 )
