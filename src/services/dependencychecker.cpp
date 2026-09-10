@@ -64,13 +64,13 @@ QVariantMap buildHints(const QString &defaultPkg,
 
 // Install hint for a compile-time feature: there's no package to install
 // on the host, so instruct the user to rebuild with the right library or
-// pick a different HyprFM build.
+// pick a different Bubble build.
 QVariantMap buildFeatureHint(const QString &library)
 {
     QVariantMap out;
     const QString msg = QStringLiteral(
-        "This build of HyprFM was compiled without %1 support. "
-        "Install the full (non-minimal) package or rebuild HyprFM with %1 "
+        "This build of Bubble was compiled without %1 support. "
+        "Install the full (non-minimal) package or rebuild Bubble with %1 "
         "available at configure time.").arg(library);
     out[QStringLiteral("generic")] = msg;
     return out;

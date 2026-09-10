@@ -55,19 +55,19 @@ class TestMainWindow : public QObject
 
         bool load()
         {
-            QDir().mkpath(moduleDir.path() + "/HyprFM");
-            QFile src(QStringLiteral(TEST_MODULE_DIR "/HyprFM/qmldir"));
-            QFile dst(moduleDir.path() + "/HyprFM/qmldir");
+            QDir().mkpath(moduleDir.path() + "/Bubble");
+            QFile src(QStringLiteral(TEST_MODULE_DIR "/Bubble/qmldir"));
+            QFile dst(moduleDir.path() + "/Bubble/qmldir");
             if (!src.open(QIODevice::ReadOnly) || !dst.open(QIODevice::WriteOnly))
                 return false;
             for (const QByteArray &line : src.readAll().split('\n'))
                 if (!line.startsWith("prefer "))
                     dst.write(line + '\n');
             dst.close();
-            QFile::link(QStringLiteral(TEST_MODULE_DIR "/HyprFM/qml"), moduleDir.path() + "/HyprFM/qml");
+            QFile::link(QStringLiteral(TEST_MODULE_DIR "/Bubble/qml"), moduleDir.path() + "/Bubble/qml");
 
             QQuickStyle::setStyle("Basic");
-            const QString configDir = home.path() + "/.config/hyprfm";
+            const QString configDir = home.path() + "/.config/bubble";
             QDir().mkpath(configDir);
             const QStringList themeDirs {QStringLiteral(TEST_SOURCE_DIR "/themes")};
 

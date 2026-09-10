@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
-import HyprFM
+import Bubble
 import Quill as Quill
 
 Rectangle {
@@ -40,6 +40,7 @@ Rectangle {
     Component { id: iconUsb; IconUsb { size: 18; color: Theme.subtext } }
     Component { id: iconUsbOff; IconUsb { size: 18; color: Theme.muted } }
     Component { id: iconFolder; IconFolder { size: 18; color: Theme.subtext } }
+    Component { id: iconMonitor; IconMonitor { size: 18; color: Theme.subtext } }
 
     // Inverse rounded corner — top right
     Shape {
@@ -79,7 +80,7 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        // App header: "hyprfm" + collapse button
+        // App header: "Bubble" + collapse button
         Item {
             Layout.fillWidth: true
             height: 44
@@ -87,7 +88,7 @@ Rectangle {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Hyprfm"
+                text: "Bubble"
                 color: Theme.text
                 font.pointSize: Theme.fontLarge
                 font.weight: Font.Bold

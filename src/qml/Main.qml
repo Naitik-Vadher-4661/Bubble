@@ -4,7 +4,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Shapes
 import QtQuick.Window
-import HyprFM
+import Bubble
 import "components" as Components
 import Quill as Q
 
@@ -15,7 +15,7 @@ ApplicationWindow {
     minimumWidth: 760
     minimumHeight: 520
     visibility: Window.Windowed
-    title: "HyprFM"
+    title: "Bubble"
     color: "transparent"
     flags: Qt.platform.os === "linux" && runtimeFeatures.useIntegratedWindowControls
         ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
@@ -153,7 +153,7 @@ ApplicationWindow {
             root.applyActiveTabSort()
         }
 
-        // Bridge HyprFM theme into Quill theme singleton
+        // Bridge Bubble theme into Quill theme singleton
         Q.Theme.background = Qt.binding(() => Theme.base)
         Q.Theme.backgroundAlt = Qt.binding(() => Theme.mantle)
         Q.Theme.backgroundDeep = Qt.binding(() => Theme.crust)

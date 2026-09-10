@@ -1,12 +1,12 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Window
-import HyprFM
+import Bubble
 import Quill as Q
 
 Window {
     id: root
-    title: "HyprFM Settings"
+    title: "Bubble Settings"
     flags: Qt.Dialog | Qt.FramelessWindowHint
     color: "transparent"
 

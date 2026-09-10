@@ -1,9 +1,9 @@
 #!/bin/bash
-# Syncs PKGBUILD + .SRCINFO to the AUR repo after pushing hyprfm
+# Syncs PKGBUILD + .SRCINFO to the AUR repo after pushing bubble
 set -e
 
-MAIN_REPO="$HOME/hyprfm"
-AUR_REPO="$HOME/hyprfm-aur"
+MAIN_REPO="${MAIN_REPO:-$HOME/bubble}"
+AUR_REPO="${AUR_REPO:-$HOME/bubble-aur}"
 
 cd "$MAIN_REPO"
 

@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import HyprFM
+import Bubble
 
 Rectangle {
     id: root

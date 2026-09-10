@@ -1,10 +1,10 @@
 # Maintainer: Your Name <your@email.com>
-pkgname=hyprfm-git
+pkgname=bubble-git
 pkgver=r198.g53be041
 pkgrel=1
 pkgdesc="A lightweight Qt6/QML file manager for Hyprland"
 arch=('x86_64' 'aarch64')
-url="https://github.com/soyeb-jim285/hyprfm"
+url="https://github.com/soyeb-jim285/bubble"
 license=('MIT')
 depends=(
     'glib2'
@@ -36,10 +36,10 @@ optdepends=(
     'perl-image-exiftool: EXIF metadata for images (via exiftool)'
     'udisks2: mount/unmount devices from sidebar'
 )
-provides=('hyprfm')
-conflicts=('hyprfm')
+provides=('bubble' 'hyprfm')
+conflicts=('bubble' 'hyprfm')
 source=(
-    "${pkgname}::git+https://github.com/soyeb-jim285/hyprfm.git"
+    "${pkgname}::git+https://github.com/soyeb-jim285/bubble.git"
     "quill-icons::git+https://github.com/soyeb-jim285/quill-icons.git"
     "quill::git+https://github.com/soyeb-jim285/quill.git"
 )
@@ -63,36 +63,37 @@ build() {
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DBUILD_TESTS=OFF \
-        -DHYPRFM_DATA_DIR=/usr/share/hyprfm
+        -DBUBBLE_DATA_DIR=/usr/share/bubble
     cmake --build build --parallel
 }
 
 package() {
     # Install the compiled binary
-    install -Dm755 "build/src/hyprfm" "${pkgdir}/usr/bin/hyprfm"
+    install -Dm755 "build/src/bubble" "${pkgdir}/usr/bin/bubble"
+    ln -s bubble "${pkgdir}/usr/bin/hyprfm"
 
-    # Install themes — loaded via applicationDirPath()/../themes → /usr/share/hyprfm/themes
-    install -dm755 "${pkgdir}/usr/share/hyprfm/themes"
+    # Install themes — loaded via applicationDirPath()/../themes → /usr/share/bubble/themes
+    install -dm755 "${pkgdir}/usr/share/bubble/themes"
     install -Dm644 "${pkgname}/themes/"*.toml \
-        -t "${pkgdir}/usr/share/hyprfm/themes/"
+        -t "${pkgdir}/usr/share/bubble/themes/"
 
-    # Install QML module metadata (needed for loadFromModule to find HyprFM)
-    install -Dm644 "build/src/HyprFM/qmldir" \
-        "${pkgdir}/usr/share/hyprfm/HyprFM/qmldir"
-    install -Dm644 "build/src/HyprFM/hyprfm.qmltypes" \
-        "${pkgdir}/usr/share/hyprfm/HyprFM/hyprfm.qmltypes" 2>/dev/null || true
+    # Install QML module metadata (needed for loadFromModule to find Bubble)
+    install -Dm644 "build/src/Bubble/qmldir" \
+        "${pkgdir}/usr/share/bubble/Bubble/qmldir"
+    install -Dm644 "build/src/Bubble/bubble.qmltypes" \
+        "${pkgdir}/usr/share/bubble/Bubble/bubble.qmltypes" 2>/dev/null || true
 
     # Install QML sources for Quill module
-    install -dm755 "${pkgdir}/usr/share/hyprfm/src"
-    cp -r "${pkgname}/src/qml" "${pkgdir}/usr/share/hyprfm/src/qml"
+    install -dm755 "${pkgdir}/usr/share/bubble/src"
+    cp -r "${pkgname}/src/qml" "${pkgdir}/usr/share/bubble/src/qml"
 
     # Install desktop entry, icon and AppStream metainfo
-    install -Dm644 "${pkgname}/dist/io.github.soyeb_jim285.HyprFM.desktop" \
-        "${pkgdir}/usr/share/applications/io.github.soyeb_jim285.HyprFM.desktop"
-    install -Dm644 "${pkgname}/dist/io.github.soyeb_jim285.HyprFM.svg" \
-        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.HyprFM.svg"
-    install -Dm644 "${pkgname}/dist/io.github.soyeb_jim285.HyprFM.metainfo.xml" \
-        "${pkgdir}/usr/share/metainfo/io.github.soyeb_jim285.HyprFM.metainfo.xml"
+    install -Dm644 "${pkgname}/dist/io.github.soyeb_jim285.Bubble.desktop" \
+        "${pkgdir}/usr/share/applications/io.github.soyeb_jim285.Bubble.desktop"
+    install -Dm644 "${pkgname}/dist/io.github.soyeb_jim285.Bubble.svg" \
+        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
+    install -Dm644 "${pkgname}/dist/io.github.soyeb_jim285.Bubble.metainfo.xml" \
+        "${pkgdir}/usr/share/metainfo/io.github.soyeb_jim285.Bubble.metainfo.xml"
 
     # Install license
     install -Dm644 "${pkgname}/LICENSE" \

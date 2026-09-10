@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Controls
-import HyprFM
+import Bubble
 import Quill as Q
 
 FocusScope {
@@ -2006,12 +2006,21 @@ FocusScope {
                     }
 
                     // Empty state
-                    Text {
+                    Column {
                         anchors.centerIn: parent
                         visible: previewColumn.previewFilePath === ""
-                        text: "No selection"
-                        color: Qt.rgba(Theme.subtext.r, Theme.subtext.g, Theme.subtext.b, 0.5)
-                        font.pointSize: Theme.fontSmall
+                        spacing: 8
+                        IconEye {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            size: 24
+                            color: Qt.rgba(Theme.subtext.r, Theme.subtext.g, Theme.subtext.b, 0.3)
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: "No selection"
+                            color: Qt.rgba(Theme.subtext.r, Theme.subtext.g, Theme.subtext.b, 0.5)
+                            font.pointSize: Theme.fontSmall
+                        }
                     }
                 }
 

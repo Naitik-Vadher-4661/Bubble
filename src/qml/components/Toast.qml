@@ -1,5 +1,5 @@
 import QtQuick
-import HyprFM
+import Bubble
 
 // Toast notification container – anchored bottom-right of its parent.
 // Usage: toast.show("message", "info"|"error"|"success")
@@ -13,6 +13,10 @@ Item {
     implicitHeight: toastColumn.implicitHeight
 
     z: 200
+
+    Component { id: toastIconError; IconAlertCircle { size: 16; color: Theme.error } }
+    Component { id: toastIconSuccess; IconCheck { size: 16; color: Theme.success } }
+    Component { id: toastIconInfo; IconInfo { size: 16; color: Theme.accent } }
 
     ListModel {
         id: toastModel
@@ -39,8 +43,8 @@ Item {
 
                 Rectangle {
                     id: toastRect
-                    implicitWidth: Math.max(240, toastText.implicitWidth + 32)
-                    implicitHeight: toastText.implicitHeight + 24
+                    implicitWidth: Math.max(240, toastRow.implicitWidth + 32)
+                    implicitHeight: toastRow.implicitHeight + 20
                     radius: Theme.radiusMedium
                     color: Theme.mantle
 
@@ -49,16 +53,30 @@ Item {
                                 : toastItem.toastType === "success" ? Theme.success
                                 : Theme.accent
 
-                    Text {
-                        id: toastText
+                    Row {
+                        id: toastRow
                         anchors.centerIn: parent
-                        textFormat: Text.PlainText
-                        text: toastItem.message
-                        color: Theme.text
-                        font.pointSize: Theme.fontNormal
-                        wrapMode: Text.WordWrap
-                        horizontalAlignment: Text.AlignHCenter
-                        width: Math.min(implicitWidth, 340)
+                        spacing: 8
+
+                        Loader {
+                            anchors.verticalCenter: parent.verticalCenter
+                            sourceComponent: {
+                                if (toastItem.toastType === "error") return toastIconError
+                                if (toastItem.toastType === "success") return toastIconSuccess
+                                return toastIconInfo
+                            }
+                        }
+
+                        Text {
+                            id: toastText
+                            anchors.verticalCenter: parent.verticalCenter
+                            textFormat: Text.PlainText
+                            text: toastItem.message
+                            color: Theme.text
+                            font.pointSize: Theme.fontNormal
+                            wrapMode: Text.WordWrap
+                            width: Math.min(implicitWidth, 320)
+                        }
                     }
                 }
 

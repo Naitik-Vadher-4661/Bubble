@@ -1,12 +1,12 @@
 #!/bin/sh
-# Build a demo tree for screen recordings: one file of every kind HyprFM can
+# Build a demo tree for screen recordings: one file of every kind Bubble can
 # preview, thumbnail, or report metadata for.
 #
 #   ./scripts/make-demo-files.sh            # ~/Demo
 #   ./scripts/make-demo-files.sh ~/Showcase # custom root
 #
 # Missing optional tools are skipped with a note; nothing here is required to
-# build HyprFM. Rerunning wipes and rebuilds the tree.
+# build Bubble. Rerunning wipes and rebuilds the tree.
 set -eu
 
 root="${1:-$HOME/Demo}"
@@ -74,7 +74,7 @@ if have exiftool && [ -f "$root/Pictures/panorama.jpg" ]; then
 		-DateTimeOriginal="2025:06:14 18:32:10" \
 		-GPSLatitude=23.7808 -GPSLatitudeRef=N \
 		-GPSLongitude=90.4108 -GPSLongitudeRef=E \
-		-Artist="HyprFM demo" -ImageDescription="Rooftop at golden hour" \
+		-Artist="Bubble demo" -ImageDescription="Rooftop at golden hour" \
 		"$root/Pictures/panorama.jpg"
 else
 	skip "EXIF metadata" perl-image-exiftool
@@ -106,7 +106,7 @@ echo "documents"
 if have groff; then
 	groff -Tpdf -ms > "$root/Documents/handbook.pdf" <<'EOF'
 .TL
-HyprFM Field Handbook
+Bubble Field Handbook
 .AU
 Demo Assets
 .NH
@@ -154,7 +154,7 @@ syntax-highlight.
 ## Snippet
 
 ```bash
-hyprfm ~/Demo --new-window
+bubble ~/Demo --new-window
 ```
 
 > Previews render through `bat` when it is installed, plain text otherwise.
@@ -177,12 +177,12 @@ EOF
 } > "$root/Documents/transfers.csv"
 
 {
-	echo "2025-06-14 18:31:02 INFO  hyprfm: session restored, 3 tabs"
+	echo "2025-06-14 18:31:02 INFO  bubble: session restored, 3 tabs"
 	echo "2025-06-14 18:31:02 DEBUG previewservice: bat found at /usr/bin/bat"
 	echo "2025-06-14 18:31:07 WARN  udisks2: no polkit agent on the session bus"
 	echo "2025-06-14 18:31:19 INFO  fileops: copy started, 214 files, 1.8 GiB"
 	echo "2025-06-14 18:31:44 ERROR gio: mount smb://nas/media failed: timeout"
-} > "$root/Documents/hyprfm.log"
+} > "$root/Documents/bubble.log"
 
 # --- Code: a real git repo, so the status overlays light up -----------------
 echo "code"
@@ -190,45 +190,18 @@ cat > "$root/Code/main.cpp" <<'EOF'
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
-
     QQmlApplicationEngine engine;
-    engine.load(QUrl(QStringLiteral("qrc:/Main.qml")));
-    if (engine.rootObjects().isEmpty())
-        return -1;
-
     return app.exec();
 }
 EOF
 
-cat > "$root/Code/watcher.py" <<'EOF'
-"""Watch a directory and print what changes."""
-
-import sys
-import time
-from pathlib import Path
-
-
-def snapshot(root: Path) -> dict[Path, float]:
-    return {p: p.stat().st_mtime for p in root.rglob("*") if p.is_file()}
-
-
-def main(root: Path, interval: float = 1.0) -> None:
-    previous = snapshot(root)
-    while True:
-        time.sleep(interval)
-        current = snapshot(root)
-        for path in current.keys() - previous.keys():
-            print(f"added   {path}")
-        for path in previous.keys() - current.keys():
-            print(f"removed {path}")
-        previous = current
-
-
-if __name__ == "__main__":
-    main(Path(sys.argv[1] if len(sys.argv) > 1 else "."))
+cat > "$root/Code/CMakeLists.txt" <<'EOF'
+cmake_minimum_required(VERSION 3.22)
+project(demo LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+add_executable(demo main.cpp)
 EOF
 
 cat > "$root/Code/index.html" <<'EOF'
@@ -241,7 +214,7 @@ cat > "$root/Code/index.html" <<'EOF'
   </head>
   <body>
     <main class="card">
-      <h1>HyprFM</h1>
+      <h1>Bubble</h1>
       <p>A fast, keyboard-friendly file manager for Wayland.</p>
     </main>
   </body>
@@ -278,7 +251,7 @@ target="${1:?usage: deploy.sh <host>}"
 
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
-rsync -a --info=progress2 build/src/hyprfm "$target:/usr/local/bin/"
+rsync -a --info=progress2 build/src/bubble "$target:/usr/local/bin/"
 EOF
 chmod +x "$root/Code/deploy.sh"
 
@@ -296,7 +269,7 @@ EOF
 
 cat > "$root/Code/package.json" <<'EOF'
 {
-  "name": "hyprfm-demo",
+  "name": "bubble-demo",
   "version": "1.0.0",
   "private": true,
   "scripts": {

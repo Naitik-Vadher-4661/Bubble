@@ -64,16 +64,16 @@ namespace {
 
 // Printed by --help. Qt's QCommandLineParser would need a constructed
 // QCoreApplication, and both --help and --version have to answer before the
-// Wayland check below — `hyprfm --help` over SSH should still work.
+// Wayland check below — `bubble --help` over SSH should still work.
 void printUsage()
 {
     printf(
-        "HyprFM %s — a Qt6/QML file manager for Wayland\n"
+        "Bubble %s — a Qt6/QML file manager for Wayland\n"
         "\n"
         "Usage:\n"
-        "  hyprfm [options] [path]\n"
+        "  bubble [options] [path]\n"
         "\n"
-        "With no path, launching HyprFM while it is already running opens\n"
+        "With no path, launching Bubble while it is already running opens\n"
         "another window. With a path, the running window gains a tab instead,\n"
         "unless --new-window is given.\n"
         "\n"
@@ -83,11 +83,11 @@ void printUsage()
         "  -v, --version      Show the version and exit.\n"
         "\n"
         "Environment:\n"
-        "  HYPRFM_TIMING=1    Print startup timings to stderr.\n"
-        "  HYPRFM_MSAA=2|4    Enable full-window multisampling (costly).\n"
+        "  BUBBLE_TIMING=1    Print startup timings to stderr.\n"
+        "  BUBBLE_MSAA=2|4    Enable full-window multisampling (costly).\n"
         "\n"
         "Qt options such as -style are accepted and passed through.\n",
-        HYPRFM_VERSION);
+        BUBBLE_VERSION);
 }
 
 // The platform theme publishes its own UI font once the QPA plugin has
@@ -127,12 +127,12 @@ private:
     bool m_applying = false;
 };
 
-const char kExampleTheme[] = R"(# HyprFM theme sample.
+const char kExampleTheme[] = R"(# Bubble theme sample.
 #
 # Copy this file to "mytheme.toml" in this directory, edit the colours, then put
 #     [general]
 #     theme = "mytheme"
-# in ~/.config/hyprfm/config.toml, or pick it in Settings. Every *.toml here is
+# in ~/.config/bubble/config.toml, or pick it in Settings. Every *.toml here is
 # listed there, and a file here shadows the bundled theme of the same name.
 #
 # Any key you leave out keeps its built-in default.
@@ -195,7 +195,7 @@ int main(int argc, char *argv[])
             return 0;
         }
         if (a == "-v" || a == "--version") {
-            printf("hyprfm %s\n", HYPRFM_VERSION);
+            printf("bubble %s\n", BUBBLE_VERSION);
             return 0;
         }
     }
@@ -210,12 +210,13 @@ int main(int argc, char *argv[])
         "qt.svg.warning=false");
 
     // Keep the default path fast. Full-window MSAA is expensive on many
-    // Wayland/compositor stacks; opt in with HYPRFM_MSAA=2/4 if wanted.
+    // Wayland/compositor stacks; opt in with BUBBLE_MSAA=2/4 if wanted.
     QSurfaceFormat fmt;
-    fmt.setSamples(qMax(0, qEnvironmentVariableIntValue("HYPRFM_MSAA")));
+    fmt.setSamples(qMax(0, qMax(qEnvironmentVariableIntValue("BUBBLE_MSAA"),
+                                qEnvironmentVariableIntValue("HYPRFM_MSAA"))));
     QSurfaceFormat::setDefaultFormat(fmt);
 
-    // HyprFM is a Wayland-only application (wl-copy clipboard, Hyprland
+    // Bubble is a Wayland-only application (wl-copy clipboard, compositor
     // integration, KWin blur effects). Detect a non-Wayland session before
     // Qt tries to load the wayland QPA plugin so users see an actionable
     // message instead of the cryptic "Failed to create wl_display" error.
@@ -224,17 +225,17 @@ int main(int argc, char *argv[])
         const char *session = sessionType.isEmpty() ? "unknown" : sessionType.constData();
         fprintf(stderr,
                 "\n"
-                "HyprFM: no Wayland display available (XDG_SESSION_TYPE=%s).\n"
+                "Bubble: no Wayland display available (XDG_SESSION_TYPE=%s).\n"
                 "\n"
-                "HyprFM only supports Wayland sessions. Your current session\n"
+                "Bubble only supports Wayland sessions. Your current session\n"
                 "appears to be X11 or does not expose $WAYLAND_DISPLAY.\n"
                 "\n"
-                "To run HyprFM:\n"
+                "To run Bubble:\n"
                 "  * Log out and pick a Wayland session at the login screen\n"
                 "    (e.g. \"Ubuntu on Wayland\", GNOME on Wayland, Hyprland, KDE\n"
                 "    Plasma Wayland).\n"
                 "  * If running via Flatpak, also grant Wayland socket access:\n"
-                "      flatpak override --user --socket=wayland io.github.soyeb_jim285.HyprFM\n"
+                "      flatpak override --user --socket=wayland io.github.soyeb_jim285.Bubble\n"
                 "\n",
                 session);
         return 1;
@@ -267,13 +268,14 @@ int main(int argc, char *argv[])
     }
 
     QGuiApplication app(argc, argv);
-    app.setApplicationName("HyprFM");
-    app.setOrganizationName("hyprfm");
-    app.setDesktopFileName("hyprfm");
+    app.setApplicationName("Bubble");
+    app.setOrganizationName("bubble");
+    app.setDesktopFileName("io.github.soyeb_jim285.Bubble");
 
-    // Startup timing: opt-in via HYPRFM_TIMING=1 so normal runs stay quiet.
+    // Startup timing: opt-in via BUBBLE_TIMING=1 so normal runs stay quiet.
     // Prints milliseconds from QGuiApplication construction at each phase.
-    const bool timingEnabled = qEnvironmentVariableIntValue("HYPRFM_TIMING") != 0;
+    const bool timingEnabled = (qEnvironmentVariableIntValue("BUBBLE_TIMING") != 0)
+                            || (qEnvironmentVariableIntValue("HYPRFM_TIMING") != 0);
     QElapsedTimer startupTimer;
     startupTimer.start();
     auto mark = [&](const char *label) {
@@ -283,8 +285,8 @@ int main(int argc, char *argv[])
     };
     mark("QGuiApplication ready");
 
-    // Launching HyprFM again opens another independent window, the way every
-    // other file manager behaves. The one exception is `hyprfm <path>` while
+    // Launching Bubble again opens another independent window, the way every
+    // other file manager behaves. The one exception is `bubble <path>` while
     // an instance is already running: that forwards the path over a per-uid
     // unix socket so the running window gains a tab, which is what desktop
     // launchers and `xdg-open` rely on. `--new-window` opts out of even that.
@@ -292,12 +294,12 @@ int main(int argc, char *argv[])
     // The process that manages to listen on the socket is the "primary" one:
     // it answers those handoffs and owns the saved session (tabs + geometry).
     // Extra windows are ordinary processes that share nothing with it.
-    const QString hyprfmSocketName = QStringLiteral("hyprfm-%1").arg(static_cast<uint>(getuid()));
+    const QString bubbleSocketName = QStringLiteral("bubble-%1").arg(static_cast<uint>(getuid()));
     QLocalServer *ipcServer = nullptr;
     bool isPrimary = false;
     {
         QLocalSocket probe;
-        probe.connectToServer(hyprfmSocketName);
+        probe.connectToServer(bubbleSocketName);
         const bool instanceRunning = probe.waitForConnected(150);
 
         if (instanceRunning && !newWindow && !initialOpenPath.isEmpty()) {
@@ -315,11 +317,11 @@ int main(int argc, char *argv[])
             // would block listen(). Two instances starting at the exact same
             // moment can both land here; the second simply wins the socket,
             // which costs nothing but the first one's handoff duty.
-            QLocalServer::removeServer(hyprfmSocketName);
+            QLocalServer::removeServer(bubbleSocketName);
             ipcServer = new QLocalServer(&app);
             ipcServer->setSocketOptions(QLocalServer::UserAccessOption);
-            if (!ipcServer->listen(hyprfmSocketName))
-                qWarning() << "HyprFM: single-instance IPC listen failed:" << ipcServer->errorString();
+            if (!ipcServer->listen(bubbleSocketName))
+                qWarning() << "Bubble: single-instance IPC listen failed:" << ipcServer->errorString();
             isPrimary = ipcServer->isListening();
         }
     }
@@ -343,10 +345,29 @@ int main(int argc, char *argv[])
         return font;
     };
 
-    // Ensure config directory exists
-    const QString configDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
-                              + "/.config/hyprfm";
-    QDir().mkpath(configDir);
+    // Ensure config directory exists (~/.config/bubble, migrating from ~/.config/hyprfm if present)
+    const QString homeDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
+    const QString oldConfigDir = homeDir + "/.config/hyprfm";
+    const QString configDir = homeDir + "/.config/bubble";
+    if (!QDir(configDir).exists() && QDir(oldConfigDir).exists()) {
+        QDir().mkpath(configDir);
+        const QString oldConfigPath = oldConfigDir + "/config.toml";
+        const QString newConfigPath = configDir + "/config.toml";
+        if (QFile::exists(oldConfigPath) && !QFile::exists(newConfigPath)) {
+            QFile::copy(oldConfigPath, newConfigPath);
+        }
+        const QString oldThemesDir = oldConfigDir + "/themes";
+        const QString newThemesDir = configDir + "/themes";
+        if (QDir(oldThemesDir).exists() && !QDir(newThemesDir).exists()) {
+            QDir().mkpath(newThemesDir);
+            QDir themes(oldThemesDir);
+            for (const QString &file : themes.entryList(QDir::Files)) {
+                QFile::copy(oldThemesDir + "/" + file, newThemesDir + "/" + file);
+            }
+        }
+    } else {
+        QDir().mkpath(configDir);
+    }
     const QString configPath = configDir + "/config.toml";
 
     auto firstExistingDir = [](const QStringList &paths) {
@@ -360,23 +381,25 @@ int main(int argc, char *argv[])
 
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString dataDir = firstExistingDir({
+        QDir(appDir).filePath("../share/bubble"),
+        QDir(appDir).filePath("../../share/bubble"),
         QDir(appDir).filePath("../share/hyprfm"),
         QDir(appDir).filePath("../../share/hyprfm"),
-        QStringLiteral(HYPRFM_DATA_DIR),
-        QStringLiteral(HYPRFM_SOURCE_DIR),
+        QStringLiteral(BUBBLE_DATA_DIR),
+        QStringLiteral(BUBBLE_SOURCE_DIR),
     });
 
     QStringList themeSearchPaths = {
         QDir(appDir).filePath("../themes"),
         QDir(appDir).filePath("../../themes"),
-        QStringLiteral(HYPRFM_DATA_DIR) + "/themes",
-        QStringLiteral(HYPRFM_SOURCE_DIR) + "/themes",
+        QStringLiteral(BUBBLE_DATA_DIR) + "/themes",
+        QStringLiteral(BUBBLE_SOURCE_DIR) + "/themes",
     };
     if (!dataDir.isEmpty())
         themeSearchPaths.prepend(QDir(dataDir).filePath("themes"));
 
-    // User themes come first so ~/.config/hyprfm/themes can add to or override
-    // the bundled set.
+    // User themes come first so ~/.config/bubble/themes (or legacy ~/.config/hyprfm/themes)
+    // can add to or override the bundled set.
     QStringList themeDirs;
     const QString userThemesDir = configDir + "/themes";
     QDir().mkpath(userThemesDir);
@@ -389,13 +412,15 @@ int main(int argc, char *argv[])
             sample.write(kExampleTheme);
     }
     themeDirs.append(QDir::cleanPath(userThemesDir));
+    if (QDir(oldConfigDir + "/themes").exists())
+        themeDirs.append(QDir::cleanPath(oldConfigDir + "/themes"));
     const QString themesDir = firstExistingDir(themeSearchPaths);
     if (!themesDir.isEmpty())
         themeDirs.append(themesDir);
     if (dataDir.isEmpty())
-        qWarning() << "HyprFM: unable to locate data directory";
+        qWarning() << "Bubble: unable to locate data directory";
     if (themesDir.isEmpty())
-        qWarning() << "HyprFM: unable to locate themes directory";
+        qWarning() << "Bubble: unable to locate themes directory";
 
     // Only used the first time, while config.toml has no "theme": pick the
     // bundled theme that matches the desktop rather than always landing on the
@@ -556,13 +581,13 @@ int main(int argc, char *argv[])
 
     // Prefer the installed data layout, but keep source-tree fallbacks for dev builds.
     if (!dataDir.isEmpty()) {
-        engine.addImportPath(dataDir);                           // HyprFM module
+        engine.addImportPath(dataDir);                           // Bubble module
         engine.addImportPath(QDir(dataDir).filePath("src/qml")); // Quill module
     }
-    engine.addImportPath(QStringLiteral(HYPRFM_DATA_DIR));
-    engine.addImportPath(QStringLiteral(HYPRFM_DATA_DIR "/src/qml"));
-    engine.addImportPath(QStringLiteral(HYPRFM_SOURCE_DIR));
-    engine.addImportPath(QStringLiteral(HYPRFM_SOURCE_DIR "/src/qml"));
+    engine.addImportPath(QStringLiteral(BUBBLE_DATA_DIR));
+    engine.addImportPath(QStringLiteral(BUBBLE_DATA_DIR "/src/qml"));
+    engine.addImportPath(QStringLiteral(BUBBLE_SOURCE_DIR));
+    engine.addImportPath(QStringLiteral(BUBBLE_SOURCE_DIR "/src/qml"));
 
     // Set icon theme so QIcon::fromTheme() works (e.g. for drag pixmaps)
     QIcon::setThemeName(config->iconTheme());
@@ -610,19 +635,21 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("dependencies", dependencies);
     engine.rootContext()->setContextProperty("sessionState", sessionState);
 
-    const QString installedMainQml = dataDir.isEmpty()
-        ? QString()
-        : QDir(dataDir).filePath(QStringLiteral("HyprFM/qml/Main.qml"));
+    QString installedMainQml;
+    if (!dataDir.isEmpty()) {
+        const QString candBubble = QDir(dataDir).filePath(QStringLiteral("Bubble/qml/Main.qml"));
+        const QString candHyprFM = QDir(dataDir).filePath(QStringLiteral("HyprFM/qml/Main.qml"));
+        installedMainQml = QFile::exists(candBubble) ? candBubble : candHyprFM;
+    }
 
     // The qrc module is qmlcachegen-compiled, so loading it skips parsing
     // ~60 QML files on every launch. The installed on-disk copy is only the
-    // fallback for a qrc payload that turns out incomplete (Qt 6.7.3 built
-    // with NO_CACHEGEN dropped SettingsPanel.qml from it in v0.4.14).
+    // fallback for a qrc payload that turns out incomplete.
     mark("engine.load start");
-    engine.loadFromModule("HyprFM", "Main");
+    engine.loadFromModule("Bubble", "Main");
     if (engine.rootObjects().isEmpty() && !installedMainQml.isEmpty()
         && QFile::exists(installedMainQml)) {
-        qWarning() << "HyprFM: embedded QML module failed to load, falling back to" << installedMainQml;
+        qWarning() << "Bubble: embedded QML module failed to load, falling back to" << installedMainQml;
         engine.load(QUrl::fromLocalFile(installedMainQml));
     }
     mark("engine.load done");

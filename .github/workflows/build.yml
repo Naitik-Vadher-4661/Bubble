@@ -49,19 +49,19 @@ jobs:
             fi
           }
 
-          cmake_ver=$(grep -E '^project\(hyprfm VERSION' CMakeLists.txt \
-                       | sed -E 's/^project\(hyprfm VERSION ([0-9.]+).*/\1/')
+          cmake_ver=$(grep -E '^project\(bubble VERSION' CMakeLists.txt \
+                       | sed -E 's/^project\(bubble VERSION ([0-9.]+).*/\1/')
           check "CMakeLists.txt" "$VERSION" "$cmake_ver"
 
           flatpak_tag=$(python3 -c '
           import re
-          t = open("io.github.soyeb_jim285.HyprFM.yml").read()
-          m = re.search(r"url:\s*https://github\.com/soyeb-jim285/hyprfm\.git\s*\n(?:[^\n]*\n)*?\s*tag:\s*(v\d+\.\d+\.\d+)", t)
+          t = open("io.github.soyeb_jim285.Bubble.yml").read()
+          m = re.search(r"url:\s*https://github\.com/soyeb-jim285/bubble\.git\s*\n(?:[^\n]*\n)*?\s*tag:\s*(v\d+\.\d+\.\d+)", t)
           print(m.group(1) if m else "")
           ')
-          check "flatpak manifest hyprfm tag" "$TAG" "$flatpak_tag"
+          check "flatpak manifest bubble tag" "$TAG" "$flatpak_tag"
 
-          if grep -q "<release version=\"$VERSION\"" dist/io.github.soyeb_jim285.HyprFM.metainfo.xml; then
+          if grep -q "<release version=\"$VERSION\"" dist/io.github.soyeb_jim285.Bubble.metainfo.xml; then
             echo "OK   metainfo.xml <release> entry present"
           else
             echo "::error::metainfo.xml is missing a <release version=\"$VERSION\"> entry"
@@ -142,8 +142,8 @@ jobs:
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr \
-            -DHYPRFM_DATA_DIR=/usr/share/hyprfm \
-            -DHYPRFM_ENABLE_QML_CACHEGEN=ON
+            -DBUBBLE_DATA_DIR=/usr/share/bubble \
+            -DBUBBLE_ENABLE_QML_CACHEGEN=ON
           cmake --build build --parallel
 
       - name: Run tests
@@ -190,8 +190,8 @@ jobs:
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --plugin qt \
-            --desktop-file dist/io.github.soyeb_jim285.HyprFM.desktop \
-            --icon-file dist/io.github.soyeb_jim285.HyprFM.svg
+            --desktop-file dist/io.github.soyeb_jim285.Bubble.desktop \
+            --icon-file dist/io.github.soyeb_jim285.Bubble.svg
 
           deploy_deps_args=()
           for plugin_dir in \
@@ -215,7 +215,7 @@ jobs:
 
           scripts/prune-appdir.sh AppDir
 
-          OUTPUT="HyprFM-${TAG_NAME}-x86_64.AppImage" \
+          OUTPUT="Bubble-${TAG_NAME}-x86_64.AppImage" \
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             "${deploy_deps_args[@]}" \
@@ -239,11 +239,11 @@ jobs:
         # ships. v0.4.14 shipped a broken AppImage exactly because we had no
         # such gate; never again.
         run: |
-          chmod +x "HyprFM-${TAG_NAME}-x86_64.AppImage"
+          chmod +x "Bubble-${TAG_NAME}-x86_64.AppImage"
           set +e
           # offscreen platform needs no display; software RHI dodges Mesa.
           QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software \
-            timeout 10 "./HyprFM-${TAG_NAME}-x86_64.AppImage" \
+            timeout 10 "./Bubble-${TAG_NAME}-x86_64.AppImage" \
             > smoke.stdout 2> smoke.stderr &
           SMOKE_PID=$!
           # Give the QML engine ~5s to parse Main.qml and instantiate every
@@ -267,8 +267,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
-          name: hyprfm-appimage
-          path: HyprFM-${{ github.ref_name }}-x86_64.AppImage
+          name: bubble-appimage
+          path: Bubble-${{ github.ref_name }}-x86_64.AppImage
           if-no-files-found: error
 
   release:
@@ -285,11 +285,11 @@ jobs:
       - name: Download AppImage artifact
         uses: actions/download-artifact@v4
         with:
-          name: hyprfm-appimage
+          name: bubble-appimage
 
       # ─────────────────────────────────────────────────────────────────
       # Flatpak publishing: build, sign with GPG, upload the ostree repo
-      # to soyeb-jim285/hyprfm-flatpak-repo (served at hyprfm.soyebjim.me
+      # to soyeb-jim285/bubble-flatpak-repo (served at bubble.soyebjim.me
       # via GitHub Pages) and export a single-file bundle as a release
       # asset. Gated on tag pushes only so main-branch CI stays fast.
 
@@ -353,7 +353,7 @@ jobs:
             --gpg-sign="$GPG_FINGERPRINT" \
             --default-branch=stable \
             flatpak-build \
-            io.github.soyeb_jim285.HyprFM.yml
+            io.github.soyeb_jim285.Bubble.yml
           # Generate static deltas for efficient incremental updates
           # and re-sign the summary file.
           flatpak build-update-repo \
@@ -368,11 +368,11 @@ jobs:
           GPG_FINGERPRINT: ${{ secrets.FLATPAK_GPG_FINGERPRINT }}
         run: |
           flatpak build-bundle flatpak-repo \
-            "HyprFM-${TAG_NAME}-x86_64.flatpak" \
-            io.github.soyeb_jim285.HyprFM stable \
+            "Bubble-${TAG_NAME}-x86_64.flatpak" \
+            io.github.soyeb_jim285.Bubble stable \
             --gpg-sign="$GPG_FINGERPRINT"
 
-      - name: Publish ostree repo to hyprfm-flatpak-repo
+      - name: Publish ostree repo to bubble-flatpak-repo
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           DEPLOY_KEY: ${{ secrets.FLATPAK_REPO_DEPLOY_KEY }}
@@ -395,10 +395,10 @@ jobs:
             exit 1
           fi
 
-          git clone git@github.com:soyeb-jim285/hyprfm-flatpak-repo.git pages
+          git clone git@github.com:soyeb-jim285/bubble-flatpak-repo.git pages
           cd pages
-          git config user.name "hyprfm release bot"
-          git config user.email "release-bot@hyprfm.local"
+          git config user.name "bubble release bot"
+          git config user.email "release-bot@bubble.local"
 
           rm -rf repo
           cp -a ../flatpak-repo repo
@@ -407,7 +407,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to publish"
           else
-            git commit -m "Publish io.github.soyeb_jim285.HyprFM ${TAG_NAME}"
+            git commit -m "Publish io.github.soyeb_jim285.Bubble ${TAG_NAME}"
             git push origin main
           fi
 
@@ -429,8 +429,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            HyprFM-${{ github.ref_name }}-x86_64.AppImage
-            HyprFM-${{ github.ref_name }}-x86_64.flatpak
+            Bubble-${{ github.ref_name }}-x86_64.AppImage
+            Bubble-${{ github.ref_name }}-x86_64.flatpak
           body_path: release-notes.md
 
       - name: Trigger website rebuild
@@ -438,5 +438,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
         run: |
-          gh api repos/soyeb-jim285/hyprfm-site/dispatches \
+          gh api repos/soyeb-jim285/bubble-site/dispatches \
             -f event_type=new-release

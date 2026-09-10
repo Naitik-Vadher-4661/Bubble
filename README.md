@@ -1,25 +1,25 @@
 <div align="center">
 
-<img src="dist/io.github.soyeb_jim285.HyprFM.svg" width="96" alt="HyprFM logo"/>
+<img src="dist/io.github.soyeb_jim285.Bubble.svg" width="96" alt="Bubble logo"/>
 
-# HyprFM
+# Bubble
 
 **A fast, keyboard-friendly file manager for Hyprland and Wayland desktops.**
 
-[![License](https://img.shields.io/github/license/soyeb-jim285/hyprfm?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/soyeb-jim285/hyprfm?style=flat-square)](https://github.com/soyeb-jim285/hyprfm/releases)
-[![AUR](https://img.shields.io/aur/version/hyprfm-git?style=flat-square&logo=arch-linux)](https://aur.archlinux.org/packages/hyprfm-git)
-[![Build](https://img.shields.io/github/actions/workflow/status/soyeb-jim285/hyprfm/build.yml?style=flat-square)](https://github.com/soyeb-jim285/hyprfm/actions)
+[![License](https://img.shields.io/github/license/soyeb-jim285/bubble?style=flat-square)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/soyeb-jim285/bubble?style=flat-square)](https://github.com/soyeb-jim285/bubble/releases)
+[![AUR](https://img.shields.io/aur/version/bubble-git?style=flat-square&logo=arch-linux)](https://aur.archlinux.org/packages/bubble-git)
+[![Build](https://img.shields.io/github/actions/workflow/status/soyeb-jim285/bubble/build.yml?style=flat-square)](https://github.com/soyeb-jim285/bubble/actions)
 
 </div>
 
 ---
 
-HyprFM is a Qt6/QML file manager designed to feel native on Hyprland: lightweight, themeable, and built around fast keyboard navigation. It pairs a polished UI with the practical features power users expect, including Miller column view, kinetic scrolling, drag & drop, async operations, rich previews, and a TOML-based theme system.
+Bubble is a Qt6/QML file manager designed to feel native on Hyprland: lightweight, themeable, and built around fast keyboard navigation. It pairs a polished UI with the practical features power users expect, including Miller column view, kinetic scrolling, drag & drop, async operations, rich previews, and a TOML-based theme system.
 
 <div align="center">
 
-![HyprFM demo](docs/screenshots/demo.gif)
+![Bubble demo](docs/screenshots/demo.gif)
 *Miller columns with a live preview pane, then bulk rename with its preview list*
 
 </div>
@@ -33,7 +33,7 @@ HyprFM is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
 
 ---
 
-## 🧭 Contents
+## Contents
 
 <!-- Heading emoji must not carry a U+FE0F variation selector. GitHub keeps it
      in the generated slug but percent-encodes it inside a link, so the two
@@ -41,33 +41,33 @@ HyprFM is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
      `gh api repos/OWNER/REPO/readme -H 'Accept: application/vnd.github.html'`
      after renaming a heading. -->
 
-- [✨ Features](#-features)
+- [Features](#features)
   - [Views](#views)
   - [Navigation & input](#navigation--input)
   - [File operations](#file-operations)
   - [Look & feel](#look--feel)
   - [Integrations](#integrations)
-- [📦 Installation](#-installation)
+- [Installation](#installation)
   - [Arch Linux (AUR)](#arch-linux-aur)
   - [Flatpak (self-hosted)](#flatpak-self-hosted)
   - [AppImage (any distro)](#appimage-any-distro)
   - [Nix (flake)](#nix-flake)
   - [Build from source](#build-from-source)
-- [⌨ Keyboard shortcuts](#-keyboard-shortcuts)
+- [Keyboard shortcuts](#keyboard-shortcuts)
   - [Navigation](#navigation)
   - [Views](#views-1)
   - [Tabs & windows](#tabs--windows)
   - [File operations](#file-operations-1)
-- [⚙ Configuration](#-configuration)
-- [🎨 Theming](#-theming)
+- [Configuration](#configuration)
+- [Theming](#theming)
   - [Light and dark](#light-and-dark)
-- [🧱 Architecture](#-architecture)
-- [🤝 Contributing](#-contributing)
-- [📜 License](#-license)
+- [Architecture](#architecture)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## ✨ Features
+## Features
 
 ### Views
 
@@ -130,68 +130,78 @@ HyprFM is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
 
 ---
 
-## 📦 Installation
+## Installation
+
+### Source Install Script
+
+Clone the repository and run the automated installer:
+
+```bash
+./install.sh            # User install to ~/.local (default, no root required)
+sudo ./install.sh --system   # System-wide install to /usr/local
+./install.sh --uninstall     # Clean uninstall
+```
 
 ### Arch Linux (AUR)
 
 ```bash
-yay -S hyprfm-git
+yay -S bubble-git
 ```
 
-The PKGBUILD pulls latest `main`, builds with Ninja + parallel jobs + tests disabled, and installs to `/usr/bin/hyprfm`.
+The PKGBUILD pulls latest `main`, builds with Ninja + parallel jobs + tests disabled, and installs to `/usr/bin/bubble`.
 
 ### Flatpak (self-hosted)
 
-HyprFM publishes a signed Flatpak repository at `hyprfm.soyebjim.me`. Because HyprFM depends on the KDE Platform runtime from Flathub, the Flathub remote must exist at the **same scope** you install into. For `--user` installs, that means a `--user` Flathub remote. Add both remotes once and install:
+Bubble publishes a signed Flatpak repository at `bubble.soyebjim.me`. Because Bubble depends on the KDE Platform runtime from Flathub, the Flathub remote must exist at the **same scope** you install into. For `--user` installs, that means a `--user` Flathub remote. Add both remotes once and install:
 
 ```bash
 # Flathub at user scope (provides org.kde.Platform)
 flatpak remote-add --user --if-not-exists \
     flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
-# HyprFM repo
+# Bubble repo
 flatpak remote-add --user --if-not-exists \
-    hyprfm https://flatpak.hyprfm.soyebjim.me/hyprfm.flatpakrepo
-flatpak install --user hyprfm io.github.soyeb_jim285.HyprFM
+    bubble https://flatpak.bubble.soyebjim.me/bubble.flatpakrepo
+flatpak install --user bubble io.github.soyeb_jim285.Bubble
 ```
 
 If you'd rather install system-wide, drop every `--user` flag and prefix with `sudo`; system Flathub is already configured on most distros.
 
-Updates arrive via the usual `flatpak update`. The repo is signed with a GPG key committed at [`public-key.asc`](https://github.com/soyeb-jim285/hyprfm-flatpak-repo/blob/main/public-key.asc); Flatpak verifies every download against it automatically.
+Updates arrive via the usual `flatpak update`. The repo is signed with a GPG key committed at [`public-key.asc`](https://github.com/soyeb-jim285/bubble-flatpak-repo/blob/main/public-key.asc); Flatpak verifies every download against it automatically.
 
-Each tagged release also attaches an `HyprFM-vX.Y.Z-x86_64.flatpak` bundle to the GitHub release for users who want a single-file install without adding a remote.
+Each tagged release also attaches an `Bubble-vX.Y.Z-x86_64.flatpak` bundle to the GitHub release for users who want a single-file install without adding a remote.
 
 ### AppImage (any distro)
 
 ```bash
-curl -LO "$(curl -fsSL https://api.github.com/repos/soyeb-jim285/hyprfm/releases/latest \
+curl -LO "$(curl -fsSL https://api.github.com/repos/soyeb-jim285/bubble/releases/latest \
     | grep -o 'https://[^"]*\.AppImage')"
-chmod +x HyprFM-*.AppImage
-./HyprFM-*.AppImage
+chmod +x Bubble-*.AppImage
+./Bubble-*.AppImage
 ```
 
 The asset name carries the version, so grab the current one from the
-[releases page](https://github.com/soyeb-jim285/hyprfm/releases/latest) if you would rather not pipe through `curl`.
+[releases page](https://github.com/soyeb-jim285/bubble/releases/latest) if you would rather not pipe through `curl`.
 
 The AppImage is fully self-contained. You do not need a system Qt installation.
 
 ### Nix (flake)
 
 ```bash
-nix run github:soyeb-jim285/hyprfm
+nix run github:soyeb-jim285/bubble
 ```
 
 Or pull it into a system/home-manager flake:
 
 ```nix
 {
-  inputs.hyprfm.url = "github:soyeb-jim285/hyprfm";
+  inputs.bubble.url = "github:soyeb-jim285/bubble";
 }
 ```
 
-then reference `hyprfm.packages.<system>.default` in `environment.systemPackages` / `home.packages`. The package version is parsed straight from `CMakeLists.txt`, so it always tracks the tree it's built from.
+then reference `bubble.packages.<system>.default` in `environment.systemPackages` / `home.packages`. The package version is parsed straight from `CMakeLists.txt`, so it always tracks the tree it's built from.
 
-The package bundles the tools HyprFM shells out to, including archive handling,
+The package bundles the tools Bubble shells out to, including archive handling,
 previews, search and the gvfs client module, so nothing else has to be
 installed alongside it.
 
@@ -203,23 +213,23 @@ application's closure. On NixOS:
 services.gvfs.enable = true;
 ```
 
-Without it the Trash still works, because HyprFM reads the trash directories
+Without it the Trash still works, because Bubble reads the trash directories
 directly, but the Network sidebar (`sftp://`, `smb://`, `mtp://`) has nothing to
 connect to. On a non-NixOS host the distro's own gvfs covers this.
 
 ### Build from source
 
 ```bash
-git clone --recursive https://github.com/soyeb-jim285/hyprfm.git
-cd hyprfm
+git clone --recursive https://github.com/soyeb-jim285/bubble.git
+cd bubble
 cmake -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTS=OFF
 cmake --build build --parallel
-./build/src/hyprfm
+./build/src/bubble
 ```
 
-> **Note:** the `--recursive` flag is important: HyprFM uses Git submodules for the [Quill](https://github.com/soyeb-jim285/quill) component library and the [quill-icons](https://github.com/soyeb-jim285/quill-icons) icon set.
+> **Note:** the `--recursive` flag is important: Bubble uses Git submodules for the [Quill](https://github.com/soyeb-jim285/quill) component library and the [quill-icons](https://github.com/soyeb-jim285/quill-icons) icon set.
 
 #### AppImage from source
 
@@ -229,7 +239,7 @@ To build a self-contained AppImage from the current checkout, useful for testing
 ./scripts/build-appimage-local.sh
 ```
 
-The result lands in the repo root as `HyprFM-<version>-x86_64.AppImage`. The script downloads `linuxdeploy` into `appimage-tools/` on first run, bundles Qt, and runs an offscreen smoke test before finishing. It needs `curl` or `wget` on top of the build dependencies below.
+The result lands in the repo root as `Bubble-<version>-x86_64.AppImage`. The script downloads `linuxdeploy` into `appimage-tools/` on first run, bundles Qt, and runs an offscreen smoke test before finishing. It needs `curl` or `wget` on top of the build dependencies below.
 
 #### Dependencies
 
@@ -242,7 +252,7 @@ The result lands in the repo root as `HyprFM-<version>-x86_64.AppImage`. The scr
 
 ---
 
-## ⌨ Keyboard shortcuts
+## Keyboard shortcuts
 
 ### Navigation
 
@@ -291,8 +301,8 @@ The result lands in the repo root as `HyprFM-<version>-x86_64.AppImage`. The scr
 | `Alt+9` | Jump to the last tab |
 | `Ctrl+Alt+N` | New window |
 
-Launching `hyprfm` while it is already running opens another independent
-window. The one exception is `hyprfm <path>`, which forwards the path to the
+Launching `bubble` while it is already running opens another independent
+window. The one exception is `bubble <path>`, which forwards the path to the
 running window as a new tab, so desktop launchers and `xdg-open` keep behaving
 as expected. Pass `--new-window` (or `-n`) to get a separate window for a path
 too.
@@ -300,7 +310,7 @@ too.
 Only the first window keeps the saved session (tabs + window geometry);
 additional windows start fresh and leave it untouched.
 
-Run `hyprfm --help` for the full list of flags and environment variables.
+Run `bubble --help` for the full list of flags and environment variables.
 
 ### File operations
 
@@ -318,13 +328,13 @@ Run `hyprfm --help` for the full list of flags and environment variables.
 | `Ctrl+Alt+T` | Open terminal here |
 | `Shift+F10` | Context menu |
 
-Shortcuts can be remapped in `~/.config/hyprfm/config.toml` under the `[shortcuts]` section (see the generated `config.toml.sample` for the full key list). Fixed: `Backspace`, `Alt+1`…`Alt+9`, `Ctrl+PgUp`/`Ctrl+PgDown`, `Ctrl+Scroll`, `Escape`, `Menu`.
+Shortcuts can be remapped in `~/.config/bubble/config.toml` under the `[shortcuts]` section (see the generated `config.toml.sample` for the full key list). Fixed: `Backspace`, `Alt+1`…`Alt+9`, `Ctrl+PgUp`/`Ctrl+PgDown`, `Ctrl+Scroll`, `Escape`, `Menu`.
 
 ---
 
-## ⚙ Configuration
+## Configuration
 
-Config lives at `~/.config/hyprfm/config.toml`. On first run HyprFM writes it fully commented; changing settings inside the app rewrites the file without comments, so `~/.config/hyprfm/config.toml.sample` (regenerated on every start) is the always-documented reference.
+Config lives at `~/.config/bubble/config.toml`. On first run Bubble writes it fully commented; changing settings inside the app rewrites the file without comments, so `~/.config/bubble/config.toml.sample` (regenerated on every start) is the always-documented reference.
 
 ```toml
 [general]
@@ -398,18 +408,18 @@ types = ["png"]                     # "*", "dir", extension, or MIME ("image/*")
 
 ---
 
-## 🎨 Theming
+## Theming
 
 Themes are plain TOML files. Nothing is hardcoded in the binary. Five themes
-ship in `/usr/share/hyprfm/themes/*.toml` — `catppuccin-mocha`,
+ship in `/usr/share/bubble/themes/*.toml` — `catppuccin-mocha`,
 `catppuccin-latte`, `rose-pine`, `rose-pine-moon` and `rose-pine-dawn`. Copy one
 as a starting point:
 
 ```sh
-cp /usr/share/hyprfm/themes/catppuccin-mocha.toml ~/.config/hyprfm/themes/mytheme.toml
+cp /usr/share/bubble/themes/catppuccin-mocha.toml ~/.config/bubble/themes/mytheme.toml
 ```
 
-`~/.config/hyprfm/themes/` is created on first run and searched first, so a file
+`~/.config/bubble/themes/` is created on first run and searched first, so a file
 there shadows a bundled theme of the same name. Every `*.toml` in either
 directory appears in the theme picker. Select it there, or set it in config:
 
@@ -436,7 +446,7 @@ warning = "#f9e2af"
 error   = "#f38ba8"
 ```
 
-`~/.config/hyprfm/themes/example.toml.sample` is rewritten on every start with
+`~/.config/bubble/themes/example.toml.sample` is rewritten on every start with
 the same table plus a comment per colour, so the directory documents itself.
 
 Themes reload live on save.
@@ -455,24 +465,24 @@ dark_theme = "rose-pine"
 Both are dropdowns under Settings, so you can set them there instead. `theme`
 is whichever one is currently in effect.
 
-HyprFM does not watch your desktop for light/dark changes. If you want it to
+Bubble does not watch your desktop for light/dark changes. If you want it to
 follow a system-wide toggle, have that toggle rewrite `theme` in
 `config.toml`: the file is watched and the new theme applies immediately, with
-no restart and no need for HyprFM to be running at the time.
+no restart and no need for Bubble to be running at the time.
 
 ```sh
-sed -i 's/^theme = .*/theme = "rose-pine-dawn"/' ~/.config/hyprfm/config.toml
+sed -i 's/^theme = .*/theme = "rose-pine-dawn"/' ~/.config/bubble/config.toml
 ```
 
 The only time the desktop is consulted is the very first launch, when there is
-no `theme` yet: HyprFM asks the XDG desktop portal whether you prefer light or
+no `theme` yet: Bubble asks the XDG desktop portal whether you prefer light or
 dark so the initial theme matches rather than always starting dark.
 
 ---
 
-## 🧱 Architecture
+## Architecture
 
-HyprFM is a three-layer Qt6 application:
+Bubble is a three-layer Qt6 application:
 
 - **QML frontend** (`src/qml/`): all rendering. `Main.qml` wires tab state, selection, and shortcuts. Views (`FileGridView`, `FileDetailedView`, `FileMillerView`) are switched by `FileViewContainer`. The [Quill](https://github.com/soyeb-jim285/quill) component library provides themed Buttons, TextFields, Cards, etc.
 - **C++ backend** (`src/models/`, `src/services/`, `src/providers/`): `QAbstractListModel` subclasses for files, tabs, bookmarks, devices. Async services for clipboard, file operations, search, disk usage, previews. Exposed to QML via `setContextProperty`.
@@ -480,7 +490,7 @@ HyprFM is a three-layer Qt6 application:
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Issues and PRs welcome! A few notes:
 
@@ -492,7 +502,7 @@ Issues and PRs welcome! A few notes:
 
 ---
 
-## 📜 License
+## License
 
 [MIT](LICENSE) © Soyeb Pervez Jim
 

@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import HyprFM
+import Bubble
 import Quill as Q
 
 Q.Dialog {
@@ -654,11 +654,10 @@ Q.Dialog {
                     width: parent.width * 0.08
                     height: parent.height
 
-                    Text {
+                    IconArrowRight {
                         anchors.centerIn: parent
-                        text: "\u2192"
+                        size: 16
                         color: modelData.changed ? Theme.accent : Theme.subtext
-                        font.pointSize: Theme.fontNormal
                         opacity: modelData.changed ? 1.0 : 0.5
                     }
                 }

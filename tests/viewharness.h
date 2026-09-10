@@ -74,14 +74,14 @@ struct ViewHarness {
         model->setSynchronousReload(true);
         model->setRootPath(files.path());
 
-        // The generated module qmldir says `prefer :/HyprFM/`, which makes
+        // The generated module qmldir says `prefer :/Bubble/`, which makes
         // the engine insist on the qrc bundle that only the app binary has.
         // Stage a copy without that line next to a symlink to the qml tree.
-        QDir().mkpath(moduleDir.path() + "/HyprFM");
-        QFile src(QStringLiteral(TEST_MODULE_DIR "/HyprFM/qmldir"));
+        QDir().mkpath(moduleDir.path() + "/Bubble");
+        QFile src(QStringLiteral(TEST_MODULE_DIR "/Bubble/qmldir"));
         if (!src.open(QIODevice::ReadOnly))
             return false;
-        QFile dst(moduleDir.path() + "/HyprFM/qmldir");
+        QFile dst(moduleDir.path() + "/Bubble/qmldir");
         if (!dst.open(QIODevice::WriteOnly))
             return false;
         for (const QByteArray &line : src.readAll().split('\n')) {
@@ -89,7 +89,7 @@ struct ViewHarness {
                 dst.write(line + '\n');
         }
         dst.close();
-        QFile::link(QStringLiteral(TEST_MODULE_DIR "/HyprFM/qml"), moduleDir.path() + "/HyprFM/qml");
+        QFile::link(QStringLiteral(TEST_MODULE_DIR "/Bubble/qml"), moduleDir.path() + "/Bubble/qml");
 
         QQmlEngine *engine = view.engine();
         engine->addImportPath(moduleDir.path());
