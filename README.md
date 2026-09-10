@@ -6,10 +6,10 @@
 
 **A fast, keyboard-friendly file manager for Hyprland and Wayland desktops.**
 
-[![License](https://img.shields.io/github/license/soyeb-jim285/bubble?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/soyeb-jim285/bubble?style=flat-square)](https://github.com/soyeb-jim285/bubble/releases)
+[![License](https://img.shields.io/github/license/TattvaOrg/Bubble?style=flat-square)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/TattvaOrg/Bubble?style=flat-square)](https://github.com/TattvaOrg/Bubble/releases)
 [![AUR](https://img.shields.io/aur/version/bubble-git?style=flat-square&logo=arch-linux)](https://aur.archlinux.org/packages/bubble-git)
-[![Build](https://img.shields.io/github/actions/workflow/status/soyeb-jim285/bubble/build.yml?style=flat-square)](https://github.com/soyeb-jim285/bubble/actions)
+[![Build](https://img.shields.io/github/actions/workflow/status/TattvaOrg/Bubble/build.yml?style=flat-square)](https://github.com/TattvaOrg/Bubble/actions)
 
 </div>
 
@@ -35,12 +35,6 @@ Bubble is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
 
 ## Contents
 
-<!-- Heading emoji must not carry a U+FE0F variation selector. GitHub keeps it
-     in the generated slug but percent-encodes it inside a link, so the two
-     never match and the entry silently stops jumping. Verify with
-     `gh api repos/OWNER/REPO/readme -H 'Accept: application/vnd.github.html'`
-     after renaming a heading. -->
-
 - [Features](#features)
   - [Views](#views)
   - [Navigation & input](#navigation--input)
@@ -48,6 +42,7 @@ Bubble is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
   - [Look & feel](#look--feel)
   - [Integrations](#integrations)
 - [Installation](#installation)
+  - [Source install script](#source-install-script)
   - [Arch Linux (AUR)](#arch-linux-aur)
   - [Flatpak (self-hosted)](#flatpak-self-hosted)
   - [AppImage (any distro)](#appimage-any-distro)
@@ -167,35 +162,35 @@ flatpak install --user bubble io.github.soyeb_jim285.Bubble
 
 If you'd rather install system-wide, drop every `--user` flag and prefix with `sudo`; system Flathub is already configured on most distros.
 
-Updates arrive via the usual `flatpak update`. The repo is signed with a GPG key committed at [`public-key.asc`](https://github.com/soyeb-jim285/bubble-flatpak-repo/blob/main/public-key.asc); Flatpak verifies every download against it automatically.
+Updates arrive via the usual `flatpak update`. The repo is signed with a GPG key committed at [`public-key.asc`](https://github.com/TattvaOrg/bubble-flatpak-repo/blob/main/public-key.asc); Flatpak verifies every download against it automatically.
 
 Each tagged release also attaches an `Bubble-vX.Y.Z-x86_64.flatpak` bundle to the GitHub release for users who want a single-file install without adding a remote.
 
 ### AppImage (any distro)
 
 ```bash
-curl -LO "$(curl -fsSL https://api.github.com/repos/soyeb-jim285/bubble/releases/latest \
+curl -LO "$(curl -fsSL https://api.github.com/repos/TattvaOrg/Bubble/releases/latest \
     | grep -o 'https://[^"]*\.AppImage')"
 chmod +x Bubble-*.AppImage
 ./Bubble-*.AppImage
 ```
 
 The asset name carries the version, so grab the current one from the
-[releases page](https://github.com/soyeb-jim285/bubble/releases/latest) if you would rather not pipe through `curl`.
+[releases page](https://github.com/TattvaOrg/Bubble/releases/latest) if you would rather not pipe through `curl`.
 
 The AppImage is fully self-contained. You do not need a system Qt installation.
 
 ### Nix (flake)
 
 ```bash
-nix run github:soyeb-jim285/bubble
+nix run github:TattvaOrg/Bubble
 ```
 
 Or pull it into a system/home-manager flake:
 
 ```nix
 {
-  inputs.bubble.url = "github:soyeb-jim285/bubble";
+  inputs.bubble.url = "github:TattvaOrg/Bubble";
 }
 ```
 
@@ -220,8 +215,8 @@ connect to. On a non-NixOS host the distro's own gvfs covers this.
 ### Build from source
 
 ```bash
-git clone --recursive https://github.com/soyeb-jim285/bubble.git
-cd bubble
+git clone --recursive https://github.com/TattvaOrg/Bubble.git
+cd Bubble
 cmake -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTS=OFF
