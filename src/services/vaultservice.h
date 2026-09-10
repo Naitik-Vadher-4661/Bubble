@@ -25,9 +25,12 @@ public:
     Q_INVOKABLE bool isSessionUnlocked(const QString &path) const;
     Q_INVOKABLE bool changePassword(const QString &path, const QString &oldPassword, const QString &newPassword);
     
-    // Session management for folders
+    // Session management for folders and files
     Q_INVOKABLE bool sessionUnlockFolder(const QString &path, const QString &password);
     Q_INVOKABLE void sessionRelockFolder(const QString &path);
+    Q_INVOKABLE bool sessionUnlockFile(const QString &path, const QString &password);
+    Q_INVOKABLE bool sessionOpenFile(const QString &path, const QString &password);
+    Q_INVOKABLE void sessionRelockFile(const QString &path);
     Q_INVOKABLE void relockAllSessions();
     
     // Check if a path or any ancestor is locked
@@ -59,8 +62,20 @@ private:
     bool restoreFilePermissions(const QString &path, const QString &perms);
     bool setPermissionMode(const QString &path, QFileDevice::Permissions p);
     
+    struct ActiveFileSession {
+        QByteArray dataKey;
+        QString originalPerms;
+        qint64 pid = 0;
+        QString filePath;
+    };
+
+    void checkRunningProcesses();
+    qint64 launchDefaultApp(const QString &filePath);
+
     CryptoEngine *m_crypto;
     VaultDatabase *m_db;
     QString m_configDir;
-    QSet<QString> m_activeSessions; // paths with active folder sessions
+    QSet<QString> m_activeSessions; // paths with active folder or file sessions
+    QHash<QString, ActiveFileSession> m_activeFileSessions;
+    class QTimer *m_processMonitorTimer = nullptr;
 };

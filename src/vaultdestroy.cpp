@@ -4,7 +4,10 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QDebug>
+#include <QThread>
 #include <iostream>
+#include <csignal>
+#include <sys/xattr.h>
 #include "services/cryptoengine.h"
 #include "services/vaultdatabase.h"
 
@@ -68,6 +71,62 @@ int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     const QStringList args = app.arguments();
+
+    // Mode: Watch an open file's PID and re-encrypt + lock when the PID terminates
+    if (args.contains("--watch") && args.size() >= 5) {
+        int idx = args.indexOf("--watch");
+        QString filePath = args.at(idx + 1);
+        qint64 pid = args.at(idx + 2).toLongLong();
+        QByteArray dataKey = QByteArray::fromBase64(args.at(idx + 3).toLatin1());
+
+        // Wait while pid is running
+        while (pid > 0 && kill(static_cast<pid_t>(pid), 0) == 0) {
+            QThread::msleep(500);
+        }
+
+        // Wait briefly in case another process holds the file via fuser
+        for (int i = 0; i < 5; ++i) {
+            QProcess fuser;
+            fuser.start("fuser", {filePath});
+            if (fuser.waitForFinished(500)) {
+                QString out = QString::fromUtf8(fuser.readAllStandardOutput()).trimmed();
+                if (!out.isEmpty()) {
+                    QThread::msleep(1000);
+                    continue;
+                }
+            }
+            break;
+        }
+
+        // Re-encrypt file
+        if (QFile::exists(filePath) && !dataKey.isEmpty()) {
+            CryptoEngine crypto;
+            QByteArray newIv;
+            crypto.encryptFile(filePath, dataKey, newIv);
+
+            // Update database
+            QString dbPath = QDir::homePath() + "/.config/bubble/vault.db";
+            VaultDatabase db;
+            if (db.open(dbPath)) {
+                VaultEntry entry = db.findByPath(filePath);
+                if (entry.id != 0) {
+                    entry.encIv = newIv;
+                    db.updateEntry(entry);
+                    db.removeSession(entry.id);
+                }
+                db.close();
+            }
+
+            // Set permissions to 0000
+            QFile file(filePath);
+            file.setPermissions(QFileDevice::Permissions{});
+
+            // Extended attribute
+            QByteArray pathBa = filePath.toLocal8Bit();
+            setxattr(pathBa.constData(), "user.bubble.locked", "1", 1, 0);
+        }
+        return 0;
+    }
 
     bool allUsers = args.contains("--all-users");
 

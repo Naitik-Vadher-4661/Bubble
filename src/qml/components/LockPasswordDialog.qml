@@ -12,13 +12,15 @@ Q.Dialog {
     title: {
         if (mode === "lock") return targets.length > 1 ? "Lock " + targets.length + " Items" : (isDir ? "Lock Folder" : "Lock File")
         if (mode === "change") return "Change Lock Password"
-        return isDir ? "Unlock Folder" : "Unlock File"
+        if (isPermanent) return isDir ? "Unlock Folder Permanently" : "Unlock File Permanently"
+        return isDir ? "Unlock Folder" : "Open Locked File"
     }
     subtitle: targets.length === 1 ? fileName : (targets.length + " items selected")
     initialFocusItem: (mode === "change" ? currentPasswordField : passwordField)
 
     // "lock", "unlock", "change"
     property string mode: "unlock"
+    property bool isPermanent: false
     property var targets: []
     property string targetPath: targets.length > 0 ? targets[0] : ""
     property bool isDir: false
@@ -38,6 +40,7 @@ Q.Dialog {
         root.mode = "lock"
         root.targets = Array.isArray(paths) ? paths : [paths]
         root.isDir = !!isDirectory
+        root.isPermanent = false
         root.errorText = ""
         root.checking = false
         passwordField.text = ""
@@ -49,6 +52,18 @@ Q.Dialog {
         root.mode = "unlock"
         root.targets = [path]
         root.isDir = !!isDirectory
+        root.isPermanent = false
+        root.errorText = ""
+        root.checking = false
+        passwordField.text = ""
+        root.open()
+    }
+
+    function openForPermanentUnlock(path, isDirectory) {
+        root.mode = "unlock"
+        root.targets = [path]
+        root.isDir = !!isDirectory
+        root.isPermanent = true
         root.errorText = ""
         root.checking = false
         passwordField.text = ""
@@ -105,9 +120,17 @@ Q.Dialog {
             root.checking = true
             var ok = false
             if (isDir) {
-                ok = vault.sessionUnlockFolder(targetPath, pass)
+                if (root.isPermanent) {
+                    ok = vault.unlockItem(targetPath, pass)
+                } else {
+                    ok = vault.sessionUnlockFolder(targetPath, pass)
+                }
             } else {
-                ok = vault.unlockItem(targetPath, pass)
+                if (root.isPermanent) {
+                    ok = vault.unlockItem(targetPath, pass)
+                } else {
+                    ok = vault.sessionOpenFile(targetPath, pass)
+                }
             }
             root.checking = false
             if (ok) {
@@ -221,7 +244,8 @@ Q.Dialog {
                 if (root.checking) return "Working\u2026"
                 if (root.mode === "lock") return "Lock"
                 if (root.mode === "change") return "Change Password"
-                return "Unlock"
+                if (root.isPermanent) return "Unlock Permanently"
+                return root.isDir ? "Unlock Folder" : "Open File"
             }
             variant: "primary"
             size: "small"

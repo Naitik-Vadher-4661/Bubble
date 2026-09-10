@@ -49,6 +49,7 @@ Item {
     signal customActionRequested(string action)
     signal lockRequested(var paths, bool isDir)
     signal unlockRequested(string path, bool isDir)
+    signal relockRequested(string path, bool isDir)
     signal changePasswordRequested(string path)
 
     // Menus grow to fit their widest row instead of clipping it (issue #13).
@@ -742,7 +743,11 @@ Item {
                     var isItemLocked = (typeof vault !== "undefined" && vault) ? vault.isLocked(targetPath) : false
                     items.push({ separator: true })
                     if (isItemLocked) {
-                        items.push({ text: "Unlock...", shortcut: "", action: "unlock_item", icon: "LockOpen" })
+                        var isSession = (typeof vault !== "undefined" && vault) ? vault.isSessionUnlocked(targetPath) : false
+                        if (isSession) {
+                            items.push({ text: "Re-lock Now", shortcut: "", action: "relock_item", icon: "Lock" })
+                        }
+                        items.push({ text: "Unlock Permanently...", shortcut: "", action: "unlock_item", icon: "LockOpen" })
                         items.push({ text: "Change Lock Password...", shortcut: "", action: "change_lock_password", icon: "Lock" })
                     } else {
                         items.push({
@@ -853,6 +858,7 @@ Item {
         case "emptytrash": emptyTrashRequested(); break
         case "lock_item": lockRequested(effectivePaths, targetIsDir); break
         case "unlock_item": unlockRequested(targetPath, targetIsDir); break
+        case "relock_item": relockRequested(targetPath, targetIsDir); break
         case "change_lock_password": changePasswordRequested(targetPath); break
         default:
             if (action.startsWith("custom:")) {

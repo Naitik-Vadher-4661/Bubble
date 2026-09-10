@@ -9,6 +9,12 @@
 #include <QDebug>
 #include <QDateTime>
 #include <QUuid>
+#include <QTimer>
+#include <QMimeDatabase>
+#include <QMimeType>
+#include <QSettings>
+#include <QCoreApplication>
+#include <csignal>
 #include <sys/xattr.h>
 
 VaultService::VaultService(const QString &configDir, QObject *parent)
@@ -25,6 +31,23 @@ VaultService::VaultService(const QString &configDir, QObject *parent)
 
 VaultService::~VaultService()
 {
+    // Copy the active sessions map first so we don't mutate during iteration
+    const QHash<QString, ActiveFileSession> sessions = m_activeFileSessions;
+    for (auto it = sessions.begin(); it != sessions.end(); ++it) {
+        const QString &path = it.key();
+        const ActiveFileSession &sess = it.value();
+        if (sess.pid > 0 && kill(static_cast<pid_t>(sess.pid), 0) == 0) {
+            QStringList watcherArgs;
+            watcherArgs << "--watch" << path << QString::number(sess.pid) << QString::fromLatin1(sess.dataKey.toBase64());
+            QProcess::startDetached("bubble-vault-destroy", watcherArgs);
+            m_activeFileSessions.remove(path);
+            m_activeSessions.remove(path);
+        } else {
+            sessionRelockFile(path);
+        }
+    }
+    m_activeFileSessions.clear();
+
     relockAllSessions();
 }
 
@@ -198,8 +221,234 @@ void VaultService::sessionRelockFolder(const QString &path)
     emit sessionEnded(path);
 }
 
+bool VaultService::sessionUnlockFile(const QString &path, const QString &password)
+{
+    VaultEntry entry = m_db->findByPath(path);
+    if (entry.id == 0) {
+        emit lockError(path, "File is not locked");
+        return false;
+    }
+
+    if (entry.type != "file") {
+        emit lockError(path, "Item is not a file");
+        return false;
+    }
+
+    if (!m_crypto->verifyPassword(password, entry.pwHash, entry.pwSalt)) {
+        emit accessDenied(path);
+        return false;
+    }
+
+    QByteArray pwKey = m_crypto->deriveKey(password, entry.encSalt);
+    QByteArray dataKey = m_crypto->decryptKey(entry.encKey, pwKey);
+
+    if (dataKey.isEmpty()) {
+        emit lockError(path, "Failed to decrypt data key");
+        return false;
+    }
+
+    // Temporarily restore permissions and decrypt file for session
+    setImmutable(path, false);
+    restoreFilePermissions(path, entry.originalPerms);
+
+    if (!m_crypto->decryptFile(path, dataKey, entry.encIv)) {
+        setPermissionMode(path, QFileDevice::Permissions{});
+        setImmutable(path, true);
+        emit lockError(path, "Failed to decrypt file contents");
+        return false;
+    }
+
+    setExtendedAttribute(path, false);
+
+    ActiveFileSession session;
+    session.dataKey = dataKey;
+    session.originalPerms = entry.originalPerms;
+    session.filePath = path;
+    session.pid = 0;
+
+    m_activeFileSessions.insert(path, session);
+    m_activeSessions.insert(path);
+    m_db->addSession(entry.id, QUuid::createUuid().toString());
+
+    emit sessionStarted(path);
+    return true;
+}
+
+bool VaultService::sessionOpenFile(const QString &path, const QString &password)
+{
+    if (!isSessionUnlocked(path)) {
+        if (!sessionUnlockFile(path, password)) {
+            return false;
+        }
+    }
+
+    qint64 pid = launchDefaultApp(path);
+    if (pid > 0 && m_activeFileSessions.contains(path)) {
+        m_activeFileSessions[path].pid = pid;
+    }
+
+    if (!m_processMonitorTimer) {
+        m_processMonitorTimer = new QTimer(this);
+        connect(m_processMonitorTimer, &QTimer::timeout, this, &VaultService::checkRunningProcesses);
+    }
+    if (!m_processMonitorTimer->isActive()) {
+        m_processMonitorTimer->start(1000);
+    }
+
+    return true;
+}
+
+void VaultService::sessionRelockFile(const QString &path)
+{
+    if (!m_activeFileSessions.contains(path)) {
+        m_activeSessions.remove(path);
+        return;
+    }
+
+    ActiveFileSession session = m_activeFileSessions.take(path);
+    VaultEntry entry = m_db->findByPath(path);
+
+    if (QFile::exists(path) && !session.dataKey.isEmpty()) {
+        QByteArray newIv;
+        if (m_crypto->encryptFile(path, session.dataKey, newIv)) {
+            if (entry.id != 0) {
+                entry.encIv = newIv;
+                m_db->updateEntry(entry);
+            }
+        } else {
+            qWarning() << "Failed to re-encrypt file on session relock:" << path;
+        }
+
+        setExtendedAttribute(path, true);
+        setImmutable(path, true);
+        setPermissionMode(path, QFileDevice::Permissions{});
+    }
+
+    m_activeSessions.remove(path);
+    if (entry.id != 0) {
+        m_db->removeSession(entry.id);
+    }
+
+    emit itemLocked(path);
+    emit sessionEnded(path);
+}
+
+void VaultService::checkRunningProcesses()
+{
+    QStringList toRelock;
+    for (auto it = m_activeFileSessions.begin(); it != m_activeFileSessions.end(); ++it) {
+        const QString &path = it.key();
+        ActiveFileSession &sess = it.value();
+
+        bool isAlive = false;
+        if (sess.pid > 0 && kill(static_cast<pid_t>(sess.pid), 0) == 0) {
+            isAlive = true;
+        } else {
+            // Check if another process currently has the file open via fuser
+            QProcess fuser;
+            fuser.start("fuser", {path});
+            if (fuser.waitForFinished(500)) {
+                QString output = QString::fromUtf8(fuser.readAllStandardOutput()).trimmed();
+                if (!output.isEmpty()) {
+                    QStringList pids = output.split(' ', Qt::SkipEmptyParts);
+                    if (!pids.isEmpty()) {
+                        bool ok = false;
+                        qint64 newPid = pids.first().toLongLong(&ok);
+                        if (ok && newPid > 0 && newPid != QCoreApplication::applicationPid()) {
+                            sess.pid = newPid;
+                            isAlive = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!isAlive) {
+            toRelock.append(path);
+        }
+    }
+
+    for (const QString &path : toRelock) {
+        sessionRelockFile(path);
+    }
+
+    if (m_activeFileSessions.isEmpty() && m_processMonitorTimer) {
+        m_processMonitorTimer->stop();
+    }
+}
+
+qint64 VaultService::launchDefaultApp(const QString &filePath)
+{
+    QMimeDatabase mimeDb;
+    QMimeType mime = mimeDb.mimeTypeForFile(filePath);
+    QString mimeName = mime.name();
+
+    // 1. Query default desktop file via xdg-mime
+    QProcess xdgMime;
+    xdgMime.start("xdg-mime", {"query", "default", mimeName});
+    if (xdgMime.waitForFinished(1000)) {
+        QString desktopFile = QString::fromUtf8(xdgMime.readAllStandardOutput()).trimmed();
+        if (!desktopFile.isEmpty()) {
+            QStringList searchDirs;
+            searchDirs << QDir::homePath() + "/.local/share/applications"
+                       << "/usr/local/share/applications"
+                       << "/usr/share/applications";
+            QString entryPath;
+            for (const QString &dir : searchDirs) {
+                QString candidate = dir + "/" + desktopFile;
+                if (QFile::exists(candidate)) {
+                    entryPath = candidate;
+                    break;
+                }
+            }
+
+            if (!entryPath.isEmpty()) {
+                QSettings entry(entryPath, QSettings::IniFormat);
+                entry.beginGroup("Desktop Entry");
+                QString execLine = entry.value("Exec").toString();
+                if (!execLine.isEmpty()) {
+                    QStringList parts = QProcess::splitCommand(execLine);
+                    if (!parts.isEmpty()) {
+                        QString program = parts.takeFirst();
+                        QStringList args;
+                        bool fileAdded = false;
+                        for (const QString &part : parts) {
+                            if (part == "%f" || part == "%F" || part == "%u" || part == "%U") {
+                                args.append(filePath);
+                                fileAdded = true;
+                            } else if (!part.startsWith('%')) {
+                                args.append(part);
+                            }
+                        }
+                        if (!fileAdded) {
+                            args.append(filePath);
+                        }
+
+                        qint64 pid = 0;
+                        if (QProcess::startDetached(program, args, QString(), &pid) && pid > 0) {
+                            return pid;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback: launch with xdg-open
+    qint64 pid = 0;
+    if (QProcess::startDetached("xdg-open", {filePath}, QString(), &pid)) {
+        return pid;
+    }
+    return 0;
+}
+
 void VaultService::relockAllSessions()
 {
+    QStringList fileSessions = m_activeFileSessions.keys();
+    for (const QString &path : fileSessions) {
+        sessionRelockFile(path);
+    }
+
     QSet<QString> sessions = m_activeSessions;
     for (const QString &path : sessions) {
         sessionRelockFolder(path);

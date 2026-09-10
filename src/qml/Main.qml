@@ -1281,8 +1281,11 @@ ApplicationWindow {
             var info = fsModel.fileProperties(path)
             if (info && info["isDir"]) {
                 root.navigateActivePaneTo(path)
-            } else {
+            } else if (lockPasswordDialog.isPermanent) {
                 fileOps.openFile(path)
+                toast.show("File permanently unlocked", "info")
+            } else {
+                toast.show("Secure session active (re-locks when file is closed)", "info")
             }
         }
         onLocked: (path) => {
@@ -1292,6 +1295,25 @@ ApplicationWindow {
         }
         onPasswordChanged: (path) => {
             toast.show("Lock password updated", "info")
+        }
+    }
+
+    Connections {
+        target: (typeof vault !== "undefined" && vault) ? vault : null
+        function onItemLocked(path) {
+            fsModel.refresh()
+            splitFsModel.refresh()
+        }
+        function onItemUnlocked(path) {
+            fsModel.refresh()
+            splitFsModel.refresh()
+        }
+        function onSessionEnded(path) {
+            fsModel.refresh()
+            splitFsModel.refresh()
+            var parts = String(path).split("/")
+            var name = parts[parts.length - 1] || path
+            toast.show(name + " closed and re-locked securely", "info")
         }
     }
 
@@ -2848,7 +2870,17 @@ ApplicationWindow {
             lockPasswordDialog.openForLock(paths, isDir)
         }
         onUnlockRequested: (path, isDir) => {
-            lockPasswordDialog.openForUnlock(path, isDir)
+            lockPasswordDialog.openForPermanentUnlock(path, isDir)
+        }
+        onRelockRequested: (path, isDir) => {
+            if (isDir) {
+                vault.sessionRelockFolder(path)
+            } else {
+                vault.sessionRelockFile(path)
+            }
+            fsModel.refresh()
+            splitFsModel.refresh()
+            toast.show("Item re-locked securely", "info")
         }
         onChangePasswordRequested: (path) => {
             lockPasswordDialog.openForChange(path)
@@ -3282,7 +3314,15 @@ ApplicationWindow {
                 var props = fsModel.fileProperties(paths[0])
                 if (props && props["isDir"]) isFirstDir = true
                 if (typeof vault !== "undefined" && vault && vault.isLocked(paths[0])) {
-                    lockPasswordDialog.openForUnlock(paths[0], isFirstDir)
+                    if (vault.isSessionUnlocked(paths[0])) {
+                        if (isFirstDir) vault.sessionRelockFolder(paths[0])
+                        else vault.sessionRelockFile(paths[0])
+                        fsModel.refresh()
+                        splitFsModel.refresh()
+                        toast.show("Item re-locked securely", "info")
+                    } else {
+                        lockPasswordDialog.openForUnlock(paths[0], isFirstDir)
+                    }
                 } else {
                     lockPasswordDialog.openForLock(paths, isFirstDir)
                 }
@@ -3446,7 +3486,7 @@ ApplicationWindow {
             if (isDirectory && !vault.isSessionUnlocked(filePath)) {
                 lockPasswordDialog.openForUnlock(filePath, true)
                 return
-            } else if (!isDirectory) {
+            } else if (!isDirectory && !vault.isSessionUnlocked(filePath)) {
                 lockPasswordDialog.openForUnlock(filePath, false)
                 return
             }

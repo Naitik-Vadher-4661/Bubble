@@ -21,6 +21,7 @@ private slots:
     void testVaultServiceChangePassword();
     void testVaultServiceLockUnlockDirectory();
     void testVaultServiceSessionFolder();
+    void testVaultServiceSessionFile();
 };
 
 void TestVault::testCryptoEngineHashVerify()
@@ -356,6 +357,81 @@ void TestVault::testVaultServiceSessionFolder()
     vault.sessionRelockFolder(secretFolder);
     QVERIFY(!vault.isSessionUnlocked(secretFolder));
     QVERIFY(vault.isLocked(secretFolder));
+}
+
+void TestVault::testVaultServiceSessionFile()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    QString configDir = tempDir.filePath("config");
+    QString secretFile = tempDir.filePath("session_doc.txt");
+
+    QByteArray originalContent = "Original confidential text";
+    {
+        QFile f(secretFile);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(originalContent);
+        f.close();
+    }
+
+    VaultService vault(configDir);
+    QVERIFY(vault.lockItem(secretFile, "MySecretPass"));
+    QVERIFY(vault.isLocked(secretFile));
+    QVERIFY(!vault.isSessionUnlocked(secretFile));
+
+    // File content should be encrypted on disk
+    {
+        QFile f(secretFile);
+        f.setPermissions(QFileDevice::ReadOwner);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QVERIFY(f.readAll() != originalContent);
+        f.close();
+    }
+
+    // Open file session
+    QVERIFY(vault.sessionUnlockFile(secretFile, "MySecretPass"));
+    QVERIFY(vault.isLocked(secretFile)); // Item is still locked in the vault!
+    QVERIFY(vault.isSessionUnlocked(secretFile)); // But session is active!
+
+    // Plaintext is accessible during session
+    {
+        QFile f(secretFile);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QCOMPARE(f.readAll(), originalContent);
+        f.close();
+    }
+
+    // User edits the file while in session
+    QByteArray modifiedContent = "Confidential text modified by user";
+    {
+        QFile f(secretFile);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(modifiedContent);
+        f.close();
+    }
+
+    // When the file is closed, sessionRelockFile is triggered
+    vault.sessionRelockFile(secretFile);
+    QVERIFY(vault.isLocked(secretFile));
+    QVERIFY(!vault.isSessionUnlocked(secretFile));
+
+    // After relock, content on disk is encrypted again and permissions are 0000
+    {
+        QFile f(secretFile);
+        f.setPermissions(QFileDevice::ReadOwner);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QVERIFY(f.readAll() != modifiedContent);
+        f.close();
+    }
+
+    // Next time opened with password, the updated content is decrypted
+    QVERIFY(vault.sessionUnlockFile(secretFile, "MySecretPass"));
+    {
+        QFile f(secretFile);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QCOMPARE(f.readAll(), modifiedContent);
+        f.close();
+    }
 }
 
 QTEST_MAIN(TestVault)

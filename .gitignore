@@ -10,3 +10,5 @@ CLAUDE.md
 .claude/
 docs/*
 !docs/screenshots/
+CMakeFiles/
+CMakeCache.txt
