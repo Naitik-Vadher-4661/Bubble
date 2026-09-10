@@ -554,6 +554,8 @@ GridView {
         readonly property bool isSelected: root.selectedIndices.indexOf(index) >= 0
         readonly property bool isCutPending: clipboard.isCut && clipboard.contains(delegateItem.filePath)
         readonly property bool isPastePending: fileOps.pendingTargetPaths.indexOf(delegateItem.filePath) >= 0
+        readonly property bool isLocked: (typeof model !== "undefined" && typeof model.isLocked !== "undefined") ? model.isLocked : false
+        readonly property bool isSessionUnlocked: (typeof model !== "undefined" && typeof model.isSessionUnlocked !== "undefined") ? model.isSessionUnlocked : false
 
         // Per-folder drop target
         DropArea {
@@ -638,6 +640,16 @@ GridView {
                 size: 13
                 color: Theme.warning
             }
+        }
+
+        LockOverlay {
+            anchors.bottom: (iconImg.visible ? iconImg : thumbImg).bottom
+            anchors.right: (iconImg.visible ? iconImg : thumbImg).right
+            anchors.bottomMargin: -2
+            anchors.rightMargin: -2
+            z: 4
+            isLocked: delegateItem.isLocked
+            isSessionUnlocked: delegateItem.isSessionUnlocked
         }
 
         Rectangle {

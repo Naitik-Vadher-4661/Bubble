@@ -26,6 +26,9 @@ set(BUBBLE_SOURCES
     services/gitstatusservice.cpp
     services/sessionstate.cpp
     services/metadataextractor.cpp
+    services/cryptoengine.cpp
+    services/vaultdatabase.cpp
+    services/vaultservice.cpp
     providers/thumbnailprovider.cpp
     providers/pdfpreviewprovider.cpp
 )
@@ -94,6 +97,8 @@ list(APPEND bubble_qml_module_args
         qml/components/ContextMenu.qml
         qml/components/BulkRenameDialog.qml
         qml/components/ArchivePasswordDialog.qml
+        qml/components/LockPasswordDialog.qml
+        qml/components/LockOverlay.qml
         qml/components/RemoteConnectDialog.qml
         qml/components/KeyboardShortcutsDialog.qml
         qml/components/MissingDependenciesDialog.qml
@@ -247,6 +252,9 @@ target_link_libraries(bubble PRIVATE
     Qt6::Svg
     Qt6::Network
     Qt6::Concurrent
+    Qt6::Sql
+    OpenSSL::Crypto
+    PkgConfig::ARGON2
     PkgConfig::GIO
 )
 
@@ -257,6 +265,22 @@ endif()
 target_include_directories(bubble PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
+)
+
+# Standalone uninstall cleanup tool
+qt_add_executable(bubble-vault-destroy
+    vaultdestroy.cpp
+    services/cryptoengine.cpp
+    services/vaultdatabase.cpp
+)
+target_link_libraries(bubble-vault-destroy PRIVATE
+    Qt6::Core
+    Qt6::Sql
+    OpenSSL::Crypto
+    PkgConfig::ARGON2
+)
+target_include_directories(bubble-vault-destroy PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 set(BUBBLE_DATA_DIR "${CMAKE_SOURCE_DIR}" CACHE STRING "Runtime data directory for themes and QML")
@@ -277,11 +301,15 @@ if(KF6WindowSystem_FOUND)
     )
 endif()
 
-install(TARGETS bubble DESTINATION bin)
+install(TARGETS bubble bubble-vault-destroy DESTINATION bin)
 install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.desktop"
     DESTINATION share/applications)
 install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.svg"
     DESTINATION share/icons/hicolor/scalable/apps)
 install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.metainfo.xml"
     DESTINATION share/metainfo)
+install(FILES "${CMAKE_SOURCE_DIR}/dist/bubble-cleanup.hook"
+    DESTINATION share/libalpm/hooks)
+install(FILES "${CMAKE_SOURCE_DIR}/dist/org.bubble.vault.policy"
+    DESTINATION share/polkit-1/actions)
 

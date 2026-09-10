@@ -1,0 +1,12 @@
+[Trigger]
+Operation = Remove
+Type = Package
+Target = bubble
+Target = bubble-git
+Target = hyprfm
+Target = hyprfm-git
+
+[Action]
+Description = Securely shredding locked vault files before Bubble removal...
+When = PreTransaction
+Exec = /usr/bin/bubble-vault-destroy --all-users

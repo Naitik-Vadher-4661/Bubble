@@ -839,6 +839,8 @@ FocusScope {
                 readonly property bool isSelected: currentColumn.selectedIndices.indexOf(index) >= 0
                 readonly property bool isCutPending: clipboard.isCut && clipboard.contains(currentDelegate.filePath)
                 readonly property bool isPastePending: fileOps.pendingTargetPaths.indexOf(currentDelegate.filePath) >= 0
+                readonly property bool isLocked: (typeof model !== "undefined" && typeof model.isLocked !== "undefined") ? model.isLocked : false
+                readonly property bool isSessionUnlocked: (typeof model !== "undefined" && typeof model.isSessionUnlocked !== "undefined") ? model.isSessionUnlocked : false
 
                 property bool dragStarted: false
 
@@ -962,6 +964,17 @@ FocusScope {
                                     running: currentDelegate.isPastePending
                                     scale: 0.6
                                 }
+                            }
+
+                            LockOverlay {
+                                anchors.bottom: parent.bottom
+                                anchors.right: parent.right
+                                anchors.bottomMargin: -2
+                                anchors.rightMargin: -2
+                                badgeSize: 12
+                                z: 4
+                                isLocked: currentDelegate.isLocked
+                                isSessionUnlocked: currentDelegate.isSessionUnlocked
                             }
 
                             Loader {

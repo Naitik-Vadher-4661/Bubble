@@ -93,6 +93,7 @@ Bubble is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
 - **Compress / extract** archives
 - **Open With** dialog populated from `.desktop` entries
 - **Undo/redo** for file operations
+- **Secure File & Folder Vault**: Lock sensitive files or directories with AES-256-GCM encryption + Argon2id key derivation, `0000` permission stripping, immutable flag (`chattr +i`), and automatic shredding (`bubble-vault-destroy`) upon uninstallation
 
 ### Look & feel
 
@@ -174,24 +175,24 @@ Ensure the following build and runtime dependencies are installed on your system
 
 | Category | Packages |
 |---|---|
-| **Required (build)** | `cmake`, `ninja`, `git`, `qt6-base`, `qt6-declarative`, `qt6-svg` |
-| **Required (runtime)** | `qt6-base`, `qt6-declarative`, `qt6-svg`, `qt6-wayland`, `glib2`, `xdg-utils` |
+| **Required (build)** | `cmake`, `ninja`, `git`, `qt6-base`, `qt6-declarative`, `qt6-svg`, `openssl`, `argon2` |
+| **Required (runtime)** | `qt6-base`, `qt6-declarative`, `qt6-svg`, `qt6-wayland`, `glib2`, `xdg-utils`, `openssl`, `argon2` |
 | **Archive utilities** | `tar`, `gzip`, `bzip2`, `xz`, `zstd`, `zip`, `unzip`, `p7zip` (`7z`), `libarchive` (`bsdtar`) |
 | **Optional enhancements** | `kwindowsystem` (native KDE blur), `wl-clipboard` (clipboard), `fd` (fast search), `bat` (syntax highlighting), `ffmpeg` (video thumbnails), `poppler` (PDF previews), `udisks2` (device mounting) |
 
 **On Arch Linux / CachyOS:**
 ```bash
-sudo pacman -S cmake ninja git qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils
+sudo pacman -S cmake ninja git qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils openssl argon2
 ```
 
 **On Ubuntu / Debian (24.04+):**
 ```bash
-sudo apt install cmake ninja-build git qt6-base-dev qt6-declarative-dev libqt6svg6-dev libglib2.0-dev xdg-utils
+sudo apt install cmake ninja-build git qt6-base-dev qt6-declarative-dev libqt6svg6-dev libglib2.0-dev xdg-utils libssl-dev libargon2-dev
 ```
 
 **On Fedora:**
 ```bash
-sudo dnf install cmake ninja-build git qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel glib2-devel xdg-utils
+sudo dnf install cmake ninja-build git qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel glib2-devel xdg-utils openssl-devel libargon2-devel
 ```
 
 #### 2. Clone the Repository
@@ -302,6 +303,7 @@ Run `bubble --help` for the full list of flags and environment variables.
 | `Ctrl+N` | New file |
 | `Alt+Return` | Properties |
 | `Ctrl+Alt+T` | Open terminal here |
+| `Ctrl+L` | Lock / Unlock file or folder (when selected) |
 | `Shift+F10` | Context menu |
 
 Shortcuts can be remapped in `~/.config/bubble/config.toml` under the `[shortcuts]` section (see the generated `config.toml.sample` for the full key list). Fixed: `Backspace`, `Alt+1`…`Alt+9`, `Ctrl+PgUp`/`Ctrl+PgDown`, `Ctrl+Scroll`, `Escape`, `Menu`.

@@ -344,3 +344,21 @@ add_executable(tst_xdgtrash tst_xdgtrash.cpp
 target_include_directories(tst_xdgtrash PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(tst_xdgtrash PRIVATE Qt6::Test Qt6::Core)
 add_test(NAME tst_xdgtrash COMMAND tst_xdgtrash)
+
+add_executable(tst_vault tst_vault.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/cryptoengine.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/vaultdatabase.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/vaultservice.cpp
+)
+target_include_directories(tst_vault PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(tst_vault PRIVATE
+    Qt6::Test
+    Qt6::Core
+    Qt6::Sql
+    OpenSSL::Crypto
+    PkgConfig::ARGON2
+)
+add_test(NAME tst_vault COMMAND tst_vault)
+set_tests_properties(tst_vault PROPERTIES
+    ENVIRONMENT "BUBBLE_TEST_MODE=1"
+)

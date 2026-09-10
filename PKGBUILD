@@ -15,6 +15,8 @@ depends=(
     'qt6-svg'
     'qt6-wayland'
     'xdg-utils'
+    'openssl'
+    'argon2'
 )
 makedepends=(
     'cmake'

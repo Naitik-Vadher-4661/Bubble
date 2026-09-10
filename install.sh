@@ -125,13 +125,26 @@ fi
 # Handle uninstall
 if [[ $UNINSTALL -eq 1 ]]; then
     echo "==> Uninstalling Bubble from prefix: $PREFIX"
+
+    # Securely shred and destroy all locked vault files before removal
+    if command -v bubble-vault-destroy >/dev/null 2>&1; then
+        echo "==> Securely shredding locked vault files..."
+        bubble-vault-destroy || true
+    elif [[ -x "$PREFIX/bin/bubble-vault-destroy" ]]; then
+        echo "==> Securely shredding locked vault files..."
+        "$PREFIX/bin/bubble-vault-destroy" || true
+    fi
+
     rm -f "$PREFIX/bin/bubble"
+    rm -f "$PREFIX/bin/bubble-vault-destroy"
     rm -f "$PREFIX/bin/hyprfm"
     rm -rf "$PREFIX/share/bubble"
     rm -f "$PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
     rm -f "$PREFIX/share/applications/bubble.desktop"
     rm -f "$PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
     rm -f "$PREFIX/share/metainfo/io.github.soyeb_jim285.Bubble.metainfo.xml"
+    rm -f "$PREFIX/share/libalpm/hooks/bubble-cleanup.hook"
+    rm -f "$PREFIX/share/polkit-1/actions/org.bubble.vault.policy"
 
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache -f -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true

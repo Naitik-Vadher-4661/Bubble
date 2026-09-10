@@ -1272,6 +1272,29 @@ ApplicationWindow {
         onRejected: root.passwordDialogContext = null
     }
 
+    LockPasswordDialog {
+        id: lockPasswordDialog
+        objectName: "lockPasswordDialog"
+        onUnlocked: (path) => {
+            fsModel.refresh()
+            splitFsModel.refresh()
+            var info = fsModel.fileProperties(path)
+            if (info && info["isDir"]) {
+                root.navigateActivePaneTo(path)
+            } else {
+                fileOps.openFile(path)
+            }
+        }
+        onLocked: (path) => {
+            fsModel.refresh()
+            splitFsModel.refresh()
+            toast.show("Item locked securely", "info")
+        }
+        onPasswordChanged: (path) => {
+            toast.show("Lock password updated", "info")
+        }
+    }
+
     RemoteConnectDialog {
         id: remoteConnectDialog
         onConnected: (uri) => root.navigateActivePaneTo(uri)
@@ -2760,7 +2783,13 @@ ApplicationWindow {
             appChooserDialog.open()
         }
 
-        onCutRequested: (paths) => clipboard.cut(paths)
+        onCutRequested: (paths) => {
+            if (root.anyPathLocked(paths)) {
+                toast.show("Cannot move locked files. Unlock them first.", "warning")
+                return
+            }
+            clipboard.cut(paths)
+        }
 
         onCopyRequested: (paths) => clipboard.copy(paths)
 
@@ -2770,10 +2799,26 @@ ApplicationWindow {
 
         onCopyPathRequested: (path) => fileOps.copyPathToClipboard(path)
 
-        onRenameRequested: (path) => root.openRenameDialogForPath(path)
-        onBulkRenameRequested: (paths) => root.openBulkRenameDialog(paths)
+        onRenameRequested: (path) => {
+            if (typeof vault !== "undefined" && vault && vault.isLocked(path)) {
+                toast.show("Cannot rename locked file. Unlock it first.", "warning")
+                return
+            }
+            root.openRenameDialogForPath(path)
+        }
+        onBulkRenameRequested: (paths) => {
+            if (root.anyPathLocked(paths)) {
+                toast.show("Cannot rename locked files. Unlock them first.", "warning")
+                return
+            }
+            root.openBulkRenameDialog(paths)
+        }
 
         onTrashRequested: (paths) => {
+            if (root.anyPathLocked(paths)) {
+                toast.show("Cannot trash locked files. Unlock them first.", "warning")
+                return
+            }
             var hasRemotePath = false
             for (var i = 0; i < paths.length; ++i) {
                 if (fileOps.isRemotePath(paths[i])) {
@@ -2791,8 +2836,22 @@ ApplicationWindow {
         onEmptyTrashRequested: emptyTrashConfirmDialog.open()
 
         onDeleteRequested: (paths) => {
+            if (root.anyPathLocked(paths)) {
+                toast.show("Cannot delete locked files. Unlock them first.", "warning")
+                return
+            }
             deleteConfirmPaths = paths
             deleteConfirmDialog.open()
+        }
+
+        onLockRequested: (paths, isDir) => {
+            lockPasswordDialog.openForLock(paths, isDir)
+        }
+        onUnlockRequested: (path, isDir) => {
+            lockPasswordDialog.openForUnlock(path, isDir)
+        }
+        onChangePasswordRequested: (path) => {
+            lockPasswordDialog.openForChange(path)
         }
 
         onOpenInTerminalRequested: (path) => {
@@ -3214,6 +3273,23 @@ ApplicationWindow {
         }
     }
 
+    Shortcut {
+        sequence: "Ctrl+L"
+        onActivated: {
+            var paths = getSelectedPaths()
+            if (paths.length > 0) {
+                var isFirstDir = false
+                var props = fsModel.fileProperties(paths[0])
+                if (props && props["isDir"]) isFirstDir = true
+                if (typeof vault !== "undefined" && vault && vault.isLocked(paths[0])) {
+                    lockPasswordDialog.openForUnlock(paths[0], isFirstDir)
+                } else {
+                    lockPasswordDialog.openForLock(paths, isFirstDir)
+                }
+            }
+        }
+    }
+
     // Quick preview (spacebar)
     Shortcut {
         sequence: config.shortcutMap["quick_preview"]
@@ -3353,8 +3429,28 @@ ApplicationWindow {
         root._operationCallbacks = pending
     }
 
+    function anyPathLocked(paths) {
+        if (!paths || typeof vault === "undefined" || !vault)
+            return false
+        for (var i = 0; i < paths.length; ++i) {
+            if (vault.isLocked(paths[i]))
+                return true
+        }
+        return false
+    }
+
     function handlePaneFileActivated(pane, filePath, isDirectory) {
         root.setActivePane(pane)
+
+        if (typeof vault !== "undefined" && vault && vault.isLocked(filePath)) {
+            if (isDirectory && !vault.isSessionUnlocked(filePath)) {
+                lockPasswordDialog.openForUnlock(filePath, true)
+                return
+            } else if (!isDirectory) {
+                lockPasswordDialog.openForUnlock(filePath, false)
+                return
+            }
+        }
 
         if (isDirectory) {
             root.navigatePaneTo(pane, filePath)

@@ -1,6 +1,7 @@
 #include "models/filesystemmodel.h"
 #include "services/cloudmounts.h"
 #include "services/gitstatusservice.h"
+#include "services/vaultservice.h"
 #include "services/xdgtrash.h"
 #include <QLocale>
 #include <QDateTime>
@@ -613,6 +614,27 @@ void FileSystemModel::setGitStatusService(GitStatusService *service)
     }
 }
 
+void FileSystemModel::setVaultService(VaultService *service)
+{
+    if (m_vaultService)
+        disconnect(m_vaultService, nullptr, this, nullptr);
+    m_vaultService = service;
+    if (m_vaultService) {
+        connect(m_vaultService, &VaultService::itemLocked, this, [this](const QString &) {
+            refresh();
+        });
+        connect(m_vaultService, &VaultService::itemUnlocked, this, [this](const QString &) {
+            refresh();
+        });
+        connect(m_vaultService, &VaultService::sessionStarted, this, [this](const QString &) {
+            refresh();
+        });
+        connect(m_vaultService, &VaultService::sessionEnded, this, [this](const QString &) {
+            refresh();
+        });
+    }
+}
+
 int FileSystemModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid())
@@ -798,6 +820,16 @@ QVariant FileSystemModel::data(const QModelIndex &index, int role) const
         if (st == "dirty")      return QStringLiteral("git-dirty");
         return QString();
     }
+    case IsLockedRole: {
+        if (!m_vaultService || isTrashRoot() || isRemoteRoot())
+            return false;
+        return m_vaultService->isLocked(info.absoluteFilePath());
+    }
+    case IsSessionUnlockedRole: {
+        if (!m_vaultService || isTrashRoot() || isRemoteRoot())
+            return false;
+        return m_vaultService->isSessionUnlocked(info.absoluteFilePath());
+    }
     default:
         return {};
     }
@@ -829,6 +861,8 @@ QHash<int, QByteArray> FileSystemModel::roleNames() const
         {FileExtensionRole,    "fileExtension"},
         {MimeTypeRole,         "mimeType"},
         {SymlinkTargetRole,    "symlinkTarget"},
+        {IsLockedRole,          "isLocked"},
+        {IsSessionUnlockedRole, "isSessionUnlocked"},
     };
 }
 
@@ -887,6 +921,15 @@ void FileSystemModel::setRootPath(const QString &path)
     const QString normalizedPath = normalizeLocation(path);
     if (m_rootPath == normalizedPath)
         return;
+
+    const QString oldRoot = m_rootPath;
+
+    // Auto-relock if navigating away from a session-unlocked folder
+    if (m_vaultService && !oldRoot.isEmpty() && m_vaultService->isSessionUnlocked(oldRoot)) {
+        if (!normalizedPath.startsWith(oldRoot + "/") && normalizedPath != oldRoot) {
+            m_vaultService->sessionRelockFolder(oldRoot);
+        }
+    }
 
     // Stop watching old directory
     if (!m_rootPath.isEmpty() && !isTrashRoot() && !isRemoteRoot())
@@ -1586,6 +1629,7 @@ QVariantMap FileSystemModel::fileProperties(const QString &path) const
     props["parentDir"] = info.absolutePath();
     props["isDir"] = info.isDir();
     props["isSymlink"] = info.isSymLink();
+    props["isLocked"] = m_vaultService ? m_vaultService->isLocked(info.absoluteFilePath()) : false;
 
     // Icon name (reuse the same mapping as data())
     props["iconName"] = iconNameForEntry(info.absoluteFilePath(), info.isDir());

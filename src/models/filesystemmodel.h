@@ -14,6 +14,7 @@
 #include <QVariantMap>
 
 class GitStatusService;
+class VaultService;
 
 class FileSystemModel : public QAbstractListModel
 {
@@ -58,6 +59,8 @@ public:
         FileExtensionRole,
         MimeTypeRole,
         SymlinkTargetRole,
+        IsLockedRole,
+        IsSessionUnlockedRole,
     };
     Q_ENUM(Roles)
 
@@ -99,6 +102,7 @@ public:
     void setSynchronousReload(bool on) { m_synchronousReload = on; }
 
     void setGitStatusService(GitStatusService *service);
+    void setVaultService(VaultService *service);
 
     qint64 diskFree() const;
     qint64 diskTotal() const;
@@ -181,6 +185,7 @@ private:
     int m_fileCount = 0;
     int m_folderCount = 0;
     GitStatusService *m_gitService = nullptr;
+    VaultService *m_vaultService = nullptr;
     QProcess *m_remoteReloadProcess = nullptr;
     int m_remoteReloadGeneration = 0;
     QFutureWatcher<LocalReloadResult> *m_localReloadWatcher = nullptr;

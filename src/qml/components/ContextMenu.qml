@@ -47,6 +47,9 @@ Item {
     signal sortRequested(string column, bool ascending)
     signal emptyTrashRequested()
     signal customActionRequested(string action)
+    signal lockRequested(var paths, bool isDir)
+    signal unlockRequested(string path, bool isDir)
+    signal changePasswordRequested(string path)
 
     // Menus grow to fit their widest row instead of clipping it (issue #13).
     // The measurements mirror the row layouts below: margins, icon slots,
@@ -733,6 +736,23 @@ Item {
                     icon: "FolderPen"
                 })
                 items.push({ text: "Move to Trash", shortcut: "Delete", action: "trash", icon: "Trash", destructive: true })
+
+                // Secure locking
+                if (!remoteContext) {
+                    var isItemLocked = (typeof vault !== "undefined" && vault) ? vault.isLocked(targetPath) : false
+                    items.push({ separator: true })
+                    if (isItemLocked) {
+                        items.push({ text: "Unlock...", shortcut: "", action: "unlock_item", icon: "LockOpen" })
+                        items.push({ text: "Change Lock Password...", shortcut: "", action: "change_lock_password", icon: "Lock" })
+                    } else {
+                        items.push({
+                            text: effectivePaths.length > 1 ? ("Lock " + effectivePaths.length + " Items...") : "Lock...",
+                            shortcut: "Ctrl+L",
+                            action: "lock_item",
+                            icon: "Lock"
+                        })
+                    }
+                }
             }
             items.push({ separator: true })
             items.push({ text: "Properties", shortcut: "", action: "properties", icon: "Info" })
@@ -831,6 +851,9 @@ Item {
         case "extract": fileOps.extractArchive(targetPath, effectiveDir, fileOps.archivePassword(targetPath)); break
         case "setwallpaper": fileOps.setWallpaper(targetPath); break
         case "emptytrash": emptyTrashRequested(); break
+        case "lock_item": lockRequested(effectivePaths, targetIsDir); break
+        case "unlock_item": unlockRequested(targetPath, targetIsDir); break
+        case "change_lock_password": changePasswordRequested(targetPath); break
         default:
             if (action.startsWith("custom:")) {
                 var custom = config.customContextActions[parseInt(action.slice(7))]

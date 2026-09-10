@@ -51,6 +51,7 @@
 #include "services/runtimefeaturesservice.h"
 #include "services/dependencychecker.h"
 #include "services/gitstatusservice.h"
+#include "services/vaultservice.h"
 #include "services/sessionstate.h"
 #include "providers/thumbnailprovider.h"
 #include "providers/iconprovider.h"
@@ -544,6 +545,12 @@ int main(int argc, char *argv[])
     fsModel->setGitStatusService(primaryGitService);
     splitFsModel->setGitStatusService(secondaryGitService);
 
+    VaultService *vaultService = new VaultService(configDir, &app);
+    fsModel->setVaultService(vaultService);
+    splitFsModel->setVaultService(vaultService);
+    millerParentModel->setVaultService(vaultService);
+    millerPreviewModel->setVaultService(vaultService);
+
     // Keep the live UI in sync with persisted config values.
     QObject::connect(config, &ConfigManager::configChanged, [=, &app, &resolveUiFont]() {
         theme->loadTheme(config->theme(), themeDirs);
@@ -634,6 +641,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("runtimeFeatures", runtimeFeatures);
     engine.rootContext()->setContextProperty("dependencies", dependencies);
     engine.rootContext()->setContextProperty("sessionState", sessionState);
+    engine.rootContext()->setContextProperty("vault", vaultService);
 
     QString installedMainQml;
     if (!dataDir.isEmpty()) {
