@@ -8,7 +8,6 @@
 
 [![License](https://img.shields.io/github/license/TattvaOrg/Bubble?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/TattvaOrg/Bubble?style=flat-square)](https://github.com/TattvaOrg/Bubble/releases)
-[![AUR](https://img.shields.io/aur/version/bubble-git?style=flat-square&logo=arch-linux)](https://aur.archlinux.org/packages/bubble-git)
 [![Build](https://img.shields.io/github/actions/workflow/status/TattvaOrg/Bubble/build.yml?style=flat-square)](https://github.com/TattvaOrg/Bubble/actions)
 
 </div>
@@ -42,12 +41,8 @@ Bubble is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
   - [Look & feel](#look--feel)
   - [Integrations](#integrations)
 - [Installation](#installation)
-  - [Source install script](#source-install-script)
-  - [Arch Linux (AUR)](#arch-linux-aur)
-  - [Flatpak (self-hosted)](#flatpak-self-hosted)
-  - [AppImage (any distro)](#appimage-any-distro)
-  - [Nix (flake)](#nix-flake)
-  - [Build from source](#build-from-source)
+  - [One-liner install](#one-liner-install)
+  - [Manual install](#manual-install)
 - [Keyboard shortcuts](#keyboard-shortcuts)
   - [Navigation](#navigation)
   - [Views](#views-1)
@@ -127,123 +122,109 @@ Bubble is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
 
 ## Installation
 
-### Source Install Script
+### One-Liner Install
 
-Clone the repository and run the automated installer:
-
-```bash
-./install.sh            # User install to ~/.local (default, no root required)
-sudo ./install.sh --system   # System-wide install to /usr/local
-./install.sh --uninstall     # Clean uninstall
-```
-
-### Arch Linux (AUR)
+Run the automated installer in your terminal to build and install Bubble to `~/.local` (no root required):
 
 ```bash
-yay -S bubble-git
+curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | bash
 ```
 
-The PKGBUILD pulls latest `main`, builds with Ninja + parallel jobs + tests disabled, and installs to `/usr/bin/bubble`.
-
-### Flatpak (self-hosted)
-
-Bubble publishes a signed Flatpak repository at `bubble.soyebjim.me`. Because Bubble depends on the KDE Platform runtime from Flathub, the Flathub remote must exist at the **same scope** you install into. For `--user` installs, that means a `--user` Flathub remote. Add both remotes once and install:
-
-```bash
-# Flathub at user scope (provides org.kde.Platform)
-flatpak remote-add --user --if-not-exists \
-    flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-
-# Bubble repo
-flatpak remote-add --user --if-not-exists \
-    bubble https://flatpak.bubble.soyebjim.me/bubble.flatpakrepo
-flatpak install --user bubble io.github.soyeb_jim285.Bubble
-```
-
-If you'd rather install system-wide, drop every `--user` flag and prefix with `sudo`; system Flathub is already configured on most distros.
-
-Updates arrive via the usual `flatpak update`. The repo is signed with a GPG key committed at [`public-key.asc`](https://github.com/TattvaOrg/bubble-flatpak-repo/blob/main/public-key.asc); Flatpak verifies every download against it automatically.
-
-Each tagged release also attaches an `Bubble-vX.Y.Z-x86_64.flatpak` bundle to the GitHub release for users who want a single-file install without adding a remote.
-
-### AppImage (any distro)
-
-```bash
-curl -LO "$(curl -fsSL https://api.github.com/repos/TattvaOrg/Bubble/releases/latest \
-    | grep -o 'https://[^"]*\.AppImage')"
-chmod +x Bubble-*.AppImage
-./Bubble-*.AppImage
-```
-
-The asset name carries the version, so grab the current one from the
-[releases page](https://github.com/TattvaOrg/Bubble/releases/latest) if you would rather not pipe through `curl`.
-
-The AppImage is fully self-contained. You do not need a system Qt installation.
-
-### Nix (flake)
-
-```bash
-nix run github:TattvaOrg/Bubble
-```
-
-Or pull it into a system/home-manager flake:
-
-```nix
-{
-  inputs.bubble.url = "github:TattvaOrg/Bubble";
-}
-```
-
-then reference `bubble.packages.<system>.default` in `environment.systemPackages` / `home.packages`. The package version is parsed straight from `CMakeLists.txt`, so it always tracks the tree it's built from.
-
-The package bundles the tools Bubble shells out to, including archive handling,
-previews, search and the gvfs client module, so nothing else has to be
-installed alongside it.
-
-It cannot bundle the gvfs daemon. `gvfsd` and its backends are D-Bus-activated
-per-session services, so they come from the session rather than from an
-application's closure. On NixOS:
-
-```nix
-services.gvfs.enable = true;
-```
-
-Without it the Trash still works, because Bubble reads the trash directories
-directly, but the Network sidebar (`sftp://`, `smb://`, `mtp://`) has nothing to
-connect to. On a non-NixOS host the distro's own gvfs covers this.
-
-### Build from source
+Or clone the repository and run the script locally:
 
 ```bash
 git clone --recursive https://github.com/TattvaOrg/Bubble.git
 cd Bubble
-cmake -B build -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_TESTS=OFF
-cmake --build build --parallel
-./build/src/bubble
+./install.sh
 ```
 
-> **Note:** the `--recursive` flag is important: Bubble uses Git submodules for the [Quill](https://github.com/soyeb-jim285/quill) component library and the [quill-icons](https://github.com/soyeb-jim285/quill-icons) icon set.
+**Installer Options:**
+- Install system-wide to `/usr/local` (requires sudo):
+  ```bash
+  sudo ./install.sh --system
+  ```
+- Custom installation prefix:
+  ```bash
+  ./install.sh --prefix /opt/bubble
+  ```
+- Clean uninstall:
+  ```bash
+  ./install.sh --uninstall
+  ```
 
-#### AppImage from source
+#### Arch Linux / CachyOS (makepkg)
 
-To build a self-contained AppImage from the current checkout, useful for testing a fix that is on `main` but not yet released:
+You can build and install a native `pacman` package directly:
 
 ```bash
-./scripts/build-appimage-local.sh
+git clone --recursive https://github.com/TattvaOrg/Bubble.git
+cd Bubble
+makepkg -si
 ```
 
-The result lands in the repo root as `Bubble-<version>-x86_64.AppImage`. The script downloads `linuxdeploy` into `appimage-tools/` on first run, bundles Qt, and runs an offscreen smoke test before finishing. It needs `curl` or `wget` on top of the build dependencies below.
+---
 
-#### Dependencies
+### Manual Install
 
-| | Packages |
+If you prefer building and installing manually step-by-step from source:
+
+#### 1. Install Dependencies
+
+Ensure the following build and runtime dependencies are installed on your system:
+
+| Category | Packages |
 |---|---|
-| **Required (build)** | `cmake`, `ninja`, `qt6-base`, `qt6-declarative`, `qt6-svg` |
+| **Required (build)** | `cmake`, `ninja`, `git`, `qt6-base`, `qt6-declarative`, `qt6-svg` |
 | **Required (runtime)** | `qt6-base`, `qt6-declarative`, `qt6-svg`, `qt6-wayland`, `glib2`, `xdg-utils` |
-| **Archives** | `tar`, `gzip`, `bzip2`, `xz`, `zstd`, `zip`, `unzip`, `p7zip` (`7z`), `libarchive` (`bsdtar`). Compress and extract call these by name, so a missing one only breaks that format. |
-| **Optional** | `kwindowsystem` / `KF6WindowSystem` (native KDE blur), `wl-clipboard` (clipboard), `fd` (fast search), `bat` (syntax highlighting), `git` (git status overlays), `gvfs` (SFTP/SMB/MTP; not needed for the trash), `gvfs-smb` (SMB), `gvfs-mtp` (Android/MTP phones), `ffmpeg` (video thumbnails), `exiftool` (metadata sidebar), `udisks2` (device mounting), `poppler` / `poppler-utils` (PDF previews via `pdftoppm`) |
+| **Archive utilities** | `tar`, `gzip`, `bzip2`, `xz`, `zstd`, `zip`, `unzip`, `p7zip` (`7z`), `libarchive` (`bsdtar`) |
+| **Optional enhancements** | `kwindowsystem` (native KDE blur), `wl-clipboard` (clipboard), `fd` (fast search), `bat` (syntax highlighting), `ffmpeg` (video thumbnails), `poppler` (PDF previews), `udisks2` (device mounting) |
+
+**On Arch Linux / CachyOS:**
+```bash
+sudo pacman -S cmake ninja git qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils
+```
+
+**On Ubuntu / Debian (24.04+):**
+```bash
+sudo apt install cmake ninja-build git qt6-base-dev qt6-declarative-dev libqt6svg6-dev libglib2.0-dev xdg-utils
+```
+
+**On Fedora:**
+```bash
+sudo dnf install cmake ninja-build git qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel glib2-devel xdg-utils
+```
+
+#### 2. Clone the Repository
+
+```bash
+git clone --recursive https://github.com/TattvaOrg/Bubble.git
+cd Bubble
+```
+
+> **Note:** The `--recursive` flag is required to initialize the `src/qml/Quill` and `src/qml/icons` submodules.
+
+#### 3. Build
+
+```bash
+cmake -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DBUILD_TESTS=OFF
+
+cmake --build build --parallel
+```
+
+#### 4. Install
+
+```bash
+sudo cmake --install build
+```
+
+This installs:
+- Binary to `/usr/local/bin/bubble`
+- Desktop entry to `/usr/local/share/applications/io.github.soyeb_jim285.Bubble.desktop`
+- SVG icon to `/usr/local/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg`
+- Themes and QML assets to `/usr/local/share/bubble/`
 
 ---
 

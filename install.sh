@@ -13,7 +13,20 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLEANUP_TMP=0
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR="$(pwd)"
+fi
+
+if [[ ! -f "$SCRIPT_DIR/CMakeLists.txt" || ! -d "$SCRIPT_DIR/src" ]]; then
+    TMP_CLONE_DIR="$(mktemp -d /tmp/bubble-install-XXXXXX)"
+    echo "==> Fetching Bubble source repository to $TMP_CLONE_DIR..."
+    git clone --depth 1 --recursive https://github.com/TattvaOrg/Bubble.git "$TMP_CLONE_DIR"
+    SCRIPT_DIR="$TMP_CLONE_DIR"
+    CLEANUP_TMP=1
+fi
 cd "$SCRIPT_DIR"
 
 # Defaults
@@ -220,3 +233,7 @@ if [[ "$MODE" == "user" && ":$PATH:" != *":$PREFIX/bin:"* ]]; then
 fi
 
 echo "You can now launch Bubble by running: bubble"
+
+if [[ $CLEANUP_TMP -eq 1 ]]; then
+    rm -rf "$SCRIPT_DIR"
+fi
