@@ -78,6 +78,7 @@ const ShortcutSpec kShortcutSpecs[] = {
     {"open_terminal", "Open in Terminal"},
     {"properties", "Properties"},
     {"path_bar", "Focus Path Bar"},
+    {"vault_lock", "Lock / Unlock Item"},
     {"toggle_sidebar", "Toggle Sidebar"},
     {"split_view", "Toggle Split View"},
     {"focus_next_pane", "Focus Next Pane"},
@@ -166,6 +167,7 @@ QMap<QString, QString> ConfigManager::s_defaultShortcuts = {
     {"open_terminal", "Ctrl+Alt+T"},
     {"properties", "Alt+Return"},
     {"path_bar", "Ctrl+L"},
+    {"vault_lock", "Ctrl+Shift+L"},
     {"toggle_sidebar", "F9"},
     {"split_view", "F3"},
     {"focus_next_pane", "F6"},
@@ -705,6 +707,7 @@ current_fraction = 0.5
 # open_terminal     = "Ctrl+Alt+T"
 # properties        = "Alt+Return"
 # path_bar          = "Ctrl+L"
+# vault_lock        = "Ctrl+Shift+L"
 # toggle_sidebar    = "F9"
 # split_view        = "F3"
 # focus_next_pane   = "F6"

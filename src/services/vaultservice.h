@@ -40,6 +40,9 @@ public:
     Q_INVOKABLE bool hasOwnPassword(const QString &path) const;
     QSet<QString> allLockedPaths() const;
 
+    // Brute force protection
+    Q_INVOKABLE int getRemainingLockoutSeconds(const QString &path) const;
+
 signals:
     void itemLocked(const QString &path);
     void itemUnlocked(const QString &path);
@@ -72,10 +75,25 @@ private:
     void checkRunningProcesses();
     qint64 launchDefaultApp(const QString &filePath);
 
+    struct ActiveFolderSession {
+        QByteArray dataKey;
+        QString originalPerms;
+    };
+
+    struct RateLimitEntry {
+        int attempts = 0;
+        qint64 lastAttemptTime = 0;
+    };
+
+    void recordFailedAttempt(const QString &path);
+    void clearFailedAttempts(const QString &path);
+
     CryptoEngine *m_crypto;
     VaultDatabase *m_db;
     QString m_configDir;
     QSet<QString> m_activeSessions; // paths with active folder or file sessions
     QHash<QString, ActiveFileSession> m_activeFileSessions;
+    QHash<QString, ActiveFolderSession> m_activeFolderSessions;
+    mutable QHash<QString, RateLimitEntry> m_rateLimits;
     class QTimer *m_processMonitorTimer = nullptr;
 };

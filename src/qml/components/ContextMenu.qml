@@ -745,14 +745,14 @@ Item {
                     if (isItemLocked) {
                         var isSession = (typeof vault !== "undefined" && vault) ? vault.isSessionUnlocked(targetPath) : false
                         if (isSession) {
-                            items.push({ text: "Re-lock Now", shortcut: "", action: "relock_item", icon: "Lock" })
+                            items.push({ text: "Re-lock Now", shortcut: "Ctrl+Shift+L", action: "relock_item", icon: "Lock" })
                         }
                         items.push({ text: "Unlock Permanently...", shortcut: "", action: "unlock_item", icon: "LockOpen" })
                         items.push({ text: "Change Lock Password...", shortcut: "", action: "change_lock_password", icon: "Lock" })
                     } else {
                         items.push({
                             text: effectivePaths.length > 1 ? ("Lock " + effectivePaths.length + " Items...") : "Lock...",
-                            shortcut: "Ctrl+L",
+                            shortcut: "Ctrl+Shift+L",
                             action: "lock_item",
                             icon: "Lock"
                         })

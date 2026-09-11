@@ -22,6 +22,7 @@ private slots:
     void testVaultServiceLockUnlockDirectory();
     void testVaultServiceSessionFolder();
     void testVaultServiceSessionFile();
+    void testVaultServiceBruteForceRateLimit();
 };
 
 void TestVault::testCryptoEngineHashVerify()
@@ -344,19 +345,100 @@ void TestVault::testVaultServiceSessionFolder()
     QString secretFolder = tempDir.filePath("session_folder");
     QDir().mkpath(secretFolder);
 
+    QString childFile = secretFolder + "/note.txt";
+    QByteArray originalText = "Directory child plaintext note";
+    {
+        QFile f(childFile);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(originalText);
+        f.close();
+    }
+
     VaultService vault(configDir);
     QVERIFY(vault.lockItem(secretFolder, "SessionSecret"));
     QVERIFY(vault.isLocked(secretFolder));
     QVERIFY(!vault.isSessionUnlocked(secretFolder));
 
-    // Session unlock
+    // File inside must be encrypted on disk
+    {
+        QFile fDir(secretFolder);
+        fDir.setPermissions(QFileDevice::ReadOwner | QFileDevice::ExeOwner);
+        QFile f(childFile);
+        f.setPermissions(QFileDevice::ReadOwner);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QVERIFY(f.readAll() != originalText);
+        f.close();
+        fDir.setPermissions(QFileDevice::Permissions{});
+    }
+
+    // Session unlock folder
     QVERIFY(vault.sessionUnlockFolder(secretFolder, "SessionSecret"));
     QVERIFY(vault.isSessionUnlocked(secretFolder));
+
+    // File inside should be decrypted and accessible in session
+    {
+        QFile f(childFile);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QCOMPARE(f.readAll(), originalText);
+        f.close();
+    }
 
     // Relock session
     vault.sessionRelockFolder(secretFolder);
     QVERIFY(!vault.isSessionUnlocked(secretFolder));
     QVERIFY(vault.isLocked(secretFolder));
+
+    // File inside must be encrypted again on disk
+    {
+        QFile fDir(secretFolder);
+        fDir.setPermissions(QFileDevice::ReadOwner | QFileDevice::ExeOwner);
+        QFile f(childFile);
+        f.setPermissions(QFileDevice::ReadOwner);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QVERIFY(f.readAll() != originalText);
+        f.close();
+        fDir.setPermissions(QFileDevice::Permissions{});
+    }
+    // Restore permissions for cleanup
+    QFile fDir(secretFolder);
+    fDir.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+}
+
+void TestVault::testVaultServiceBruteForceRateLimit()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    QString configDir = tempDir.filePath("config");
+    QString secretFile = tempDir.filePath("brute_doc.txt");
+
+    {
+        QFile f(secretFile);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("Some sensitive secret");
+        f.close();
+    }
+
+    VaultService vault(configDir);
+    QVERIFY(vault.lockItem(secretFile, "CorrectPass123"));
+
+    // First 3 failed attempts should NOT trigger lockout delay
+    QVERIFY(!vault.sessionUnlockFile(secretFile, "Wrong1"));
+    QCOMPARE(vault.getRemainingLockoutSeconds(secretFile), 0);
+
+    QVERIFY(!vault.sessionUnlockFile(secretFile, "Wrong2"));
+    QCOMPARE(vault.getRemainingLockoutSeconds(secretFile), 0);
+
+    QVERIFY(!vault.sessionUnlockFile(secretFile, "Wrong3"));
+    QCOMPARE(vault.getRemainingLockoutSeconds(secretFile), 0);
+
+    // 4th failed attempt triggers 5s lockout
+    QVERIFY(!vault.sessionUnlockFile(secretFile, "Wrong4"));
+    int lockout = vault.getRemainingLockoutSeconds(secretFile);
+    QVERIFY(lockout > 0);
+    QVERIFY(lockout <= 5);
+
+    // Any attempt (even with correct password) during lockout fails immediately
+    QVERIFY(!vault.sessionUnlockFile(secretFile, "CorrectPass123"));
 }
 
 void TestVault::testVaultServiceSessionFile()

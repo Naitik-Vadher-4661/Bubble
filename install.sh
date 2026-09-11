@@ -265,19 +265,19 @@ install_distro_dependencies() {
 
     if [[ "$OS_ID" =~ (arch|cachyos|manjaro|endeavouros|artix|garuda) || "$OS_LIKE" =~ arch ]]; then
         install_cmd="pacman -S --needed"
-        pkg_list="cmake ninja git pkgconf gcc qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils openssl argon2"
+        pkg_list="cmake ninja git pkgconf gcc qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils openssl argon2 psmisc"
     elif [[ "$OS_ID" =~ (debian|ubuntu|linuxmint|pop|elementary|zorin|kali) || "$OS_LIKE" =~ (debian|ubuntu) ]]; then
         install_cmd="apt-get install -y"
-        pkg_list="cmake ninja-build git pkg-config g++ qt6-base-dev qt6-declarative-dev libqt6svg6-dev qt6-wayland libglib2.0-dev xdg-utils libssl-dev libargon2-dev libqt6sql6-sqlite"
+        pkg_list="cmake ninja-build git pkg-config g++ qt6-base-dev qt6-declarative-dev libqt6svg6-dev qt6-wayland libglib2.0-dev xdg-utils libssl-dev libargon2-dev libqt6sql6-sqlite psmisc"
     elif [[ "$OS_ID" =~ (fedora|rhel|centos|rocky|alma) || "$OS_LIKE" =~ (fedora|rhel) ]]; then
         install_cmd="dnf install -y"
-        pkg_list="cmake ninja-build git pkgconf-pkg-config gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtwayland glib2-devel xdg-utils openssl-devel libargon2-devel qt6-qtbase-sqlite"
+        pkg_list="cmake ninja-build git pkgconf-pkg-config gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtwayland glib2-devel xdg-utils openssl-devel libargon2-devel qt6-qtbase-sqlite psmisc"
     elif [[ "$OS_ID" =~ opensuse || "$OS_LIKE" =~ (suse|opensuse) ]]; then
         install_cmd="zypper install -y"
-        pkg_list="cmake ninja git pkgconf gcc-c++ qt6-base-devel qt6-declarative-devel libqt6svg6-devel libQt6WaylandClient6 glib2-devel xdg-utils libopenssl-devel libargon2-devel"
+        pkg_list="cmake ninja git pkgconf gcc-c++ qt6-base-devel qt6-declarative-devel libqt6svg6-devel libQt6WaylandClient6 glib2-devel xdg-utils libopenssl-devel libargon2-devel psmisc"
     elif [[ "$OS_ID" == "void" ]]; then
         install_cmd="xbps-install -S -y"
-        pkg_list="cmake ninja git pkg-config gcc qt6-base-devel qt6-declarative-devel qt6-svg-devel qt6-wayland-devel glib-devel openssl-devel libargon2-devel"
+        pkg_list="cmake ninja git pkg-config gcc qt6-base-devel qt6-declarative-devel qt6-svg-devel qt6-wayland-devel glib-devel openssl-devel libargon2-devel psmisc"
     else
         echo "Warning: Could not automatically identify your Linux distribution ($OS_ID)." >&2
         return 1
@@ -379,11 +379,8 @@ mkdir -p "$PREFIX/bin" "$PREFIX/share/applications"
 
 # Backward-compatibility symlink: hyprfm -> bubble
 ln -sf bubble "$PREFIX/bin/hyprfm"
-
-# Desktop shortcut alias: bubble.desktop
-if [[ -f "$SCRIPT_DIR/bubble.desktop" ]]; then
-    install -Dm644 "$SCRIPT_DIR/bubble.desktop" "$PREFIX/share/applications/bubble.desktop"
-fi
+# Clean up old legacy bubble.desktop if present to prevent duplicate application menu entries
+rm -f "$PREFIX/share/applications/bubble.desktop"
 
 # Polkit policy for system installations
 if [[ "$MODE" == "system" || "$PREFIX" == /usr* ]]; then

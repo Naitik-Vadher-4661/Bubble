@@ -89,6 +89,38 @@ bool VaultService::lockItems(const QStringList &paths, const QString &password)
     return allSuccess;
 }
 
+int VaultService::getRemainingLockoutSeconds(const QString &path) const
+{
+    if (!m_rateLimits.contains(path)) return 0;
+    const auto &entry = m_rateLimits.value(path);
+    if (entry.attempts <= 3) return 0;
+
+    int delaySecs = 0;
+    if (entry.attempts == 4) delaySecs = 5;
+    else if (entry.attempts == 5) delaySecs = 30;
+    else if (entry.attempts == 6) delaySecs = 60;
+    else delaySecs = 300;
+
+    qint64 now = QDateTime::currentSecsSinceEpoch();
+    qint64 elapsed = now - entry.lastAttemptTime;
+    if (elapsed < delaySecs) {
+        return static_cast<int>(delaySecs - elapsed);
+    }
+    return 0;
+}
+
+void VaultService::recordFailedAttempt(const QString &path)
+{
+    auto &entry = m_rateLimits[path];
+    entry.attempts++;
+    entry.lastAttemptTime = QDateTime::currentSecsSinceEpoch();
+}
+
+void VaultService::clearFailedAttempts(const QString &path)
+{
+    m_rateLimits.remove(path);
+}
+
 bool VaultService::unlockItem(const QString &path, const QString &password)
 {
     VaultEntry entry = m_db->findByPath(path);
@@ -97,10 +129,23 @@ bool VaultService::unlockItem(const QString &path, const QString &password)
         return false;
     }
 
-    if (!m_crypto->verifyPassword(password, entry.pwHash, entry.pwSalt)) {
-        emit accessDenied(path);
+    int lockout = getRemainingLockoutSeconds(path);
+    if (lockout > 0) {
+        emit lockError(path, QString("Too many failed attempts. Try again in %1s.").arg(lockout));
         return false;
     }
+
+    if (!m_crypto->verifyPassword(password, entry.pwHash, entry.pwSalt)) {
+        recordFailedAttempt(path);
+        int nextLockout = getRemainingLockoutSeconds(path);
+        if (nextLockout > 0) {
+            emit lockError(path, QString("Incorrect password. Locked for %1s.").arg(nextLockout));
+        } else {
+            emit accessDenied(path);
+        }
+        return false;
+    }
+    clearFailedAttempts(path);
 
     bool success = false;
     if (entry.type == "directory") {
@@ -185,14 +230,51 @@ bool VaultService::sessionUnlockFolder(const QString &path, const QString &passw
         return false;
     }
 
-    if (!m_crypto->verifyPassword(password, entry.pwHash, entry.pwSalt)) {
-        emit accessDenied(path);
+    int lockout = getRemainingLockoutSeconds(path);
+    if (lockout > 0) {
+        emit lockError(path, QString("Too many failed attempts. Try again in %1s.").arg(lockout));
         return false;
+    }
+
+    if (!m_crypto->verifyPassword(password, entry.pwHash, entry.pwSalt)) {
+        recordFailedAttempt(path);
+        int nextLockout = getRemainingLockoutSeconds(path);
+        if (nextLockout > 0) {
+            emit lockError(path, QString("Incorrect password. Locked for %1s.").arg(nextLockout));
+        } else {
+            emit accessDenied(path);
+        }
+        return false;
+    }
+    clearFailedAttempts(path);
+
+    QByteArray folderDataKey;
+    if (!entry.encKey.isEmpty() && !entry.encSalt.isEmpty()) {
+        QByteArray pwKey = m_crypto->deriveKey(password, entry.encSalt);
+        folderDataKey = m_crypto->decryptKey(entry.encKey, pwKey);
     }
 
     // Remove immutable flag and restore readable permissions for browsing
     setImmutable(path, false);
     restoreFilePermissions(path, entry.originalPerms.isEmpty() ? "0755" : entry.originalPerms);
+
+    // Decrypt all child files so they can be opened without password
+    if (!folderDataKey.isEmpty()) {
+        QList<VaultEntry> children = m_db->findByParentId(entry.id);
+        for (const VaultEntry &child : children) {
+            setImmutable(child.path, false);
+            restoreFilePermissions(child.path, child.originalPerms.isEmpty() ? "0644" : child.originalPerms);
+            if (!child.encIv.isEmpty()) {
+                m_crypto->decryptFile(child.path, folderDataKey, child.encIv);
+            }
+            setExtendedAttribute(child.path, false);
+        }
+
+        ActiveFolderSession sess;
+        sess.dataKey = folderDataKey;
+        sess.originalPerms = entry.originalPerms;
+        m_activeFolderSessions.insert(path, sess);
+    }
 
     m_activeSessions.insert(path);
     m_db->addSession(entry.id, QUuid::createUuid().toString());
@@ -207,15 +289,36 @@ void VaultService::sessionRelockFolder(const QString &path)
         return;
     }
 
+    VaultEntry dirEntry = m_db->findByPath(path);
+    QByteArray folderDataKey;
+    if (m_activeFolderSessions.contains(path)) {
+        folderDataKey = m_activeFolderSessions[path].dataKey;
+    }
+
+    if (!folderDataKey.isEmpty() && dirEntry.id != 0) {
+        QList<VaultEntry> children = m_db->findByParentId(dirEntry.id);
+        for (VaultEntry child : children) {
+            if (QFile::exists(child.path)) {
+                QByteArray newIv;
+                if (m_crypto->encryptFile(child.path, folderDataKey, newIv)) {
+                    child.encIv = newIv;
+                    m_db->updateEntry(child);
+                }
+                setExtendedAttribute(child.path, true);
+                setPermissionMode(child.path, QFileDevice::Permissions{});
+            }
+        }
+    }
+
     // Set permissions to 0000 and restore immutable flag
     setPermissionMode(path, QFileDevice::Permissions{});
     setImmutable(path, true);
 
     m_activeSessions.remove(path);
+    m_activeFolderSessions.remove(path);
 
-    VaultEntry entry = m_db->findByPath(path);
-    if (entry.id != 0) {
-        m_db->removeSession(entry.id);
+    if (dirEntry.id != 0) {
+        m_db->removeSession(dirEntry.id);
     }
 
     emit sessionEnded(path);
@@ -234,10 +337,23 @@ bool VaultService::sessionUnlockFile(const QString &path, const QString &passwor
         return false;
     }
 
-    if (!m_crypto->verifyPassword(password, entry.pwHash, entry.pwSalt)) {
-        emit accessDenied(path);
+    int lockout = getRemainingLockoutSeconds(path);
+    if (lockout > 0) {
+        emit lockError(path, QString("Too many failed attempts. Try again in %1s.").arg(lockout));
         return false;
     }
+
+    if (!m_crypto->verifyPassword(password, entry.pwHash, entry.pwSalt)) {
+        recordFailedAttempt(path);
+        int nextLockout = getRemainingLockoutSeconds(path);
+        if (nextLockout > 0) {
+            emit lockError(path, QString("Incorrect password. Locked for %1s.").arg(nextLockout));
+        } else {
+            emit accessDenied(path);
+        }
+        return false;
+    }
+    clearFailedAttempts(path);
 
     QByteArray pwKey = m_crypto->deriveKey(password, entry.encSalt);
     QByteArray dataKey = m_crypto->decryptKey(entry.encKey, pwKey);
@@ -535,6 +651,11 @@ bool VaultService::lockDirectory(const QString &path, const QString &password)
     QByteArray pwSalt;
     QByteArray pwHash = m_crypto->hashPassword(password, pwSalt);
 
+    QByteArray encSalt = m_crypto->generateSalt();
+    QByteArray pwKey = m_crypto->deriveKey(password, encSalt);
+    QByteArray folderDataKey = m_crypto->generateRandomKey();
+    QByteArray encKey = m_crypto->encryptKey(folderDataKey, pwKey);
+
     VaultEntry dirEntry;
     dirEntry.path = path;
     dirEntry.type = "directory";
@@ -542,6 +663,8 @@ bool VaultService::lockDirectory(const QString &path, const QString &password)
     dirEntry.isOwnPassword = true;
     dirEntry.pwSalt = pwSalt;
     dirEntry.pwHash = pwHash;
+    dirEntry.encSalt = encSalt;
+    dirEntry.encKey = encKey;
     dirEntry.originalPerms = perms;
     dirEntry.lockedAt = QDateTime::currentSecsSinceEpoch();
 
@@ -553,13 +676,33 @@ bool VaultService::lockDirectory(const QString &path, const QString &password)
     dirEntry = m_db->findByPath(path);
     qint64 dirEntryId = dirEntry.id;
 
+    // Encrypt child files with hardware AES-256-GCM using folderDataKey (instant!)
     QDirIterator it(path, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
     bool allSuccess = true;
     while (it.hasNext()) {
         QString filePath = it.next();
-        if (!lockSingleFile(filePath, password, dirEntryId, false)) {
+        QString filePerms = getFilePermissions(filePath);
+
+        QByteArray fileIv;
+        if (!m_crypto->encryptFile(filePath, folderDataKey, fileIv)) {
             allSuccess = false;
+            continue;
         }
+
+        VaultEntry childEntry;
+        childEntry.path = filePath;
+        childEntry.type = "file";
+        childEntry.parentId = dirEntryId;
+        childEntry.isOwnPassword = false;
+        childEntry.pwHash = pwHash;
+        childEntry.pwSalt = pwSalt;
+        childEntry.encIv = fileIv;
+        childEntry.originalPerms = filePerms;
+        childEntry.lockedAt = dirEntry.lockedAt;
+        m_db->addEntry(childEntry);
+
+        setExtendedAttribute(filePath, true);
+        setPermissionMode(filePath, QFileDevice::Permissions{});
     }
 
     // Set extended attribute, then try chattr, then set permission to 0000
@@ -608,6 +751,14 @@ bool VaultService::unlockDirectory(const QString &path, const QString &password)
         return false;
     }
 
+    QByteArray folderDataKey;
+    if (m_activeFolderSessions.contains(path)) {
+        folderDataKey = m_activeFolderSessions[path].dataKey;
+    } else {
+        QByteArray pwKey = m_crypto->deriveKey(password, dirEntry.encSalt);
+        folderDataKey = m_crypto->decryptKey(dirEntry.encKey, pwKey);
+    }
+
     setImmutable(path, false);
     restoreFilePermissions(path, dirEntry.originalPerms.isEmpty() ? "0755" : dirEntry.originalPerms);
     setExtendedAttribute(path, false);
@@ -615,13 +766,21 @@ bool VaultService::unlockDirectory(const QString &path, const QString &password)
     QList<VaultEntry> children = m_db->findByParentId(dirEntry.id);
     bool allSuccess = true;
     for (const VaultEntry &child : children) {
-        if (!unlockSingleFile(child.path, password)) {
-            allSuccess = false;
+        setImmutable(child.path, false);
+        restoreFilePermissions(child.path, child.originalPerms.isEmpty() ? "0644" : child.originalPerms);
+        setExtendedAttribute(child.path, false);
+
+        if (!m_activeSessions.contains(path) && !folderDataKey.isEmpty() && !child.encIv.isEmpty()) {
+            if (!m_crypto->decryptFile(child.path, folderDataKey, child.encIv)) {
+                allSuccess = false;
+            }
         }
+        m_db->removeEntry(child.path);
     }
 
     m_db->removeEntry(path);
     m_activeSessions.remove(path);
+    m_activeFolderSessions.remove(path);
 
     return allSuccess;
 }

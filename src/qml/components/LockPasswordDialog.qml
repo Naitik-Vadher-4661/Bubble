@@ -31,6 +31,37 @@ Q.Dialog {
     }
     property string errorText: ""
     property bool checking: false
+    property int lockoutSeconds: 0
+
+    Timer {
+        id: lockoutTimer
+        interval: 1000
+        repeat: true
+        running: root.lockoutSeconds > 0
+        onTriggered: {
+            if (root.lockoutSeconds > 0) {
+                root.lockoutSeconds--
+                if (root.lockoutSeconds === 0) {
+                    root.errorText = ""
+                } else {
+                    root.errorText = "Too many failed attempts. Try again in " + root.lockoutSeconds + "s."
+                }
+            }
+        }
+    }
+
+    function checkLockout(path) {
+        if (typeof vault !== "undefined" && vault && path) {
+            var rem = vault.getRemainingLockoutSeconds(path)
+            if (rem > 0) {
+                root.lockoutSeconds = rem
+                root.errorText = "Too many failed attempts. Try again in " + rem + "s."
+                return true
+            }
+        }
+        root.lockoutSeconds = 0
+        return false
+    }
 
     signal unlocked(string path)
     signal locked(string path)
@@ -41,6 +72,7 @@ Q.Dialog {
         root.targets = Array.isArray(paths) ? paths : [paths]
         root.isDir = !!isDirectory
         root.isPermanent = false
+        root.lockoutSeconds = 0
         root.errorText = ""
         root.checking = false
         passwordField.text = ""
@@ -56,6 +88,7 @@ Q.Dialog {
         root.errorText = ""
         root.checking = false
         passwordField.text = ""
+        checkLockout(path)
         root.open()
     }
 
@@ -67,6 +100,7 @@ Q.Dialog {
         root.errorText = ""
         root.checking = false
         passwordField.text = ""
+        checkLockout(path)
         root.open()
     }
 
@@ -74,6 +108,7 @@ Q.Dialog {
         root.mode = "change"
         root.targets = [path]
         root.isDir = false
+        root.lockoutSeconds = 0
         root.errorText = ""
         root.checking = false
         currentPasswordField.text = ""
@@ -112,6 +147,10 @@ Q.Dialog {
                 root.errorText = "Failed to lock item(s). Check permissions."
             }
         } else if (mode === "unlock") {
+            if (root.lockoutSeconds > 0) {
+                root.errorText = "Too many failed attempts. Try again in " + root.lockoutSeconds + "s."
+                return
+            }
             var pass = passwordField.text
             if (!pass) {
                 root.errorText = "Enter the password."
@@ -134,10 +173,17 @@ Q.Dialog {
             }
             root.checking = false
             if (ok) {
+                root.lockoutSeconds = 0
                 root.unlocked(targetPath)
                 root.accept()
             } else {
-                root.errorText = "Access Denied: Incorrect password."
+                var rem = (typeof vault !== "undefined" && vault) ? vault.getRemainingLockoutSeconds(targetPath) : 0
+                if (rem > 0) {
+                    root.lockoutSeconds = rem
+                    root.errorText = "Too many failed attempts. Try again in " + rem + "s."
+                } else {
+                    root.errorText = "Access Denied: Incorrect password."
+                }
                 passwordField.inputItem.forceActiveFocus()
                 passwordField.inputItem.selectAll()
             }
@@ -201,7 +247,7 @@ Q.Dialog {
             variant: "filled"
             placeholder: root.mode === "change" ? "New password" : "Password"
             echoMode: TextInput.Password
-            enabled: !root.checking
+            enabled: !root.checking && (root.mode !== "unlock" || root.lockoutSeconds === 0)
             inputItem.Keys.onReturnPressed: root.submit()
             onTextChanged: root.errorText = ""
         }
@@ -242,6 +288,7 @@ Q.Dialog {
         Q.Button {
             text: {
                 if (root.checking) return "Working\u2026"
+                if (root.mode === "unlock" && root.lockoutSeconds > 0) return "Locked (" + root.lockoutSeconds + "s)"
                 if (root.mode === "lock") return "Lock"
                 if (root.mode === "change") return "Change Password"
                 if (root.isPermanent) return "Unlock Permanently"
@@ -249,7 +296,7 @@ Q.Dialog {
             }
             variant: "primary"
             size: "small"
-            enabled: !root.checking
+            enabled: !root.checking && (root.mode !== "unlock" || root.lockoutSeconds === 0)
             onClicked: root.submit()
         }
     }

@@ -3306,7 +3306,7 @@ ApplicationWindow {
     }
 
     Shortcut {
-        sequence: "Ctrl+L"
+        sequence: (config && config.shortcutMap && config.shortcutMap["vault_lock"]) ? config.shortcutMap["vault_lock"] : "Ctrl+Shift+L"
         onActivated: {
             var paths = getSelectedPaths()
             if (paths.length > 0) {
