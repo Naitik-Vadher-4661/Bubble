@@ -283,6 +283,11 @@ target_include_directories(bubble-vault-destroy PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# Standalone immutable attribute helper
+add_executable(bubble-vault-helper
+    vaulthelper.cpp
+)
+
 set(BUBBLE_DATA_DIR "${CMAKE_SOURCE_DIR}" CACHE STRING "Runtime data directory for themes and QML")
 
 target_compile_definitions(bubble PRIVATE
@@ -301,7 +306,7 @@ if(KF6WindowSystem_FOUND)
     )
 endif()
 
-install(TARGETS bubble bubble-vault-destroy DESTINATION bin)
+install(TARGETS bubble bubble-vault-destroy bubble-vault-helper DESTINATION bin)
 install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.desktop"
     DESTINATION share/applications)
 install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.svg"

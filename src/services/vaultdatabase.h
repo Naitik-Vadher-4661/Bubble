@@ -22,6 +22,7 @@ struct VaultEntry {
     QString originalPerms;
     qint64 lockedAt = 0;
     bool isOwnPassword = false;
+    qint64 inode = 0;
 };
 
 class VaultDatabase : public QObject

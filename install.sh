@@ -147,7 +147,15 @@ if [[ $UNINSTALL -eq 1 ]]; then
 
     rm -f "$PREFIX/bin/bubble"
     rm -f "$PREFIX/bin/bubble-vault-destroy"
+    rm -f "$PREFIX/bin/bubble-vault-helper"
     rm -f "$PREFIX/bin/hyprfm"
+    if [[ -f "/usr/local/bin/bubble-vault-helper" ]]; then
+        if [[ $EUID -eq 0 ]]; then
+            rm -f "/usr/local/bin/bubble-vault-helper"
+        elif command -v sudo >/dev/null 2>&1; then
+            sudo rm -f "/usr/local/bin/bubble-vault-helper" 2>/dev/null || true
+        fi
+    fi
     rm -rf "$PREFIX/share/bubble"
     rm -f "$PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
     rm -f "$PREFIX/share/applications/bubble.desktop"
@@ -382,6 +390,27 @@ ln -sf bubble "$PREFIX/bin/hyprfm"
 # Clean up old legacy bubble.desktop if present to prevent duplicate application menu entries
 rm -f "$PREFIX/share/applications/bubble.desktop"
 
+# Setuid permissions for bubble-vault-helper (kernel immutable attribute protection against sudo)
+if [[ -x "$PREFIX/bin/bubble-vault-helper" ]]; then
+    if [[ $EUID -eq 0 ]]; then
+        chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+        chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+    elif command -v sudo >/dev/null 2>&1 && ( [[ $AUTO_YES -eq 1 ]] || sudo -n true 2>/dev/null ); then
+        sudo chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+        sudo chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+    fi
+fi
+
+# If installing in user mode but sudo is available, install a setuid copy to /usr/local/bin
+# so that kernel immutable attributes (+i) protect locked files from sudo/root operations
+if [[ "$MODE" == "user" && -x "$PREFIX/bin/bubble-vault-helper" && ! -x "/usr/local/bin/bubble-vault-helper" ]]; then
+    if [[ $EUID -eq 0 ]]; then
+        install -m 4755 -o root -g root "$PREFIX/bin/bubble-vault-helper" /usr/local/bin/bubble-vault-helper 2>/dev/null || true
+    elif command -v sudo >/dev/null 2>&1 && ( [[ $AUTO_YES -eq 1 ]] || sudo -n true 2>/dev/null ); then
+        sudo install -m 4755 -o root -g root "$PREFIX/bin/bubble-vault-helper" /usr/local/bin/bubble-vault-helper 2>/dev/null || true
+    fi
+fi
+
 # Polkit policy for system installations
 if [[ "$MODE" == "system" || "$PREFIX" == /usr* ]]; then
     if [[ -d "/usr/share/polkit-1/actions" && $EUID -eq 0 ]]; then
@@ -403,6 +432,7 @@ echo "    Bubble has been successfully installed!   "
 echo "=============================================="
 echo " Binary installed to: $PREFIX/bin/bubble"
 echo " Vault cleanup binary: $PREFIX/bin/bubble-vault-destroy"
+echo " Vault helper binary:  $PREFIX/bin/bubble-vault-helper"
 echo " Legacy alias:        $PREFIX/bin/hyprfm"
 echo " Desktop file:        $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
 echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"

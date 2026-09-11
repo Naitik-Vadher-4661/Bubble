@@ -14,8 +14,11 @@
 #include <QMimeType>
 #include <QSettings>
 #include <QCoreApplication>
+#include <QStandardPaths>
 #include <csignal>
+#include <sys/stat.h>
 #include <sys/xattr.h>
+#include <cerrno>
 
 VaultService::VaultService(const QString &configDir, QObject *parent)
     : QObject(parent)
@@ -163,9 +166,59 @@ bool VaultService::unlockItem(const QString &path, const QString &password)
     return success;
 }
 
+QString VaultService::lastError() const
+{
+    return m_lastError;
+}
+
+void VaultService::clearLastError()
+{
+    m_lastError.clear();
+}
+
 bool VaultService::isLocked(const QString &path) const
 {
-    return m_db->hasEntry(path);
+    if (!m_db->hasEntry(path)) {
+        return false;
+    }
+
+    // Check if the file/directory exists on disk
+    struct stat st;
+    if (lstat(path.toLocal8Bit().constData(), &st) != 0) {
+        // If file definitely does not exist on disk, purge the orphaned lock entry
+        if (errno == ENOENT) {
+            const_cast<VaultDatabase*>(m_db)->removeEntry(path);
+        }
+        // If lstat failed due to permission denied (e.g. parent folder has mode 0000),
+        // the item is still locked and exists inside the locked directory
+        return errno == EACCES;
+    }
+
+    VaultEntry entry = m_db->findByPath(path);
+    if (entry.id == 0) {
+        return false;
+    }
+
+    // If an inode was recorded and the file on disk has a different inode,
+    // the original locked file was deleted and replaced by a new file with the same name!
+    if (entry.inode > 0 && static_cast<qint64>(st.st_ino) != entry.inode) {
+        const_cast<VaultDatabase*>(m_db)->removeEntry(path);
+        return false;
+    }
+
+    // Check extended attribute if accessible and not in active session:
+    // If the file is readable (e.g. newly created file with same name) and lacks user.bubble.locked
+    // (errno == ENODATA), the original locked file was replaced.
+    if (!isSessionUnlocked(path)) {
+        char val[8] = {0};
+        ssize_t len = getxattr(path.toLocal8Bit().constData(), "user.bubble.locked", val, sizeof(val));
+        if (len < 0 && errno == ENODATA) {
+            const_cast<VaultDatabase*>(m_db)->removeEntry(path);
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool VaultService::isSessionUnlocked(const QString &path) const
@@ -189,8 +242,28 @@ bool VaultService::changePassword(const QString &path, const QString &oldPasswor
     QByteArray oldPwKey = m_crypto->deriveKey(oldPassword, entry.encSalt);
     QByteArray dataKey = m_crypto->decryptKey(entry.encKey, oldPwKey);
     if (dataKey.isEmpty() && entry.type == "file") {
-        emit lockError(path, "Failed to decrypt data key");
+        m_lastError = "Failed to decrypt data key";
+        emit lockError(path, m_lastError);
         return false;
+    }
+
+    // Verify file integrity on disk before allowing password change
+    if (entry.type == "file" && !entry.encIv.isEmpty()) {
+        QFile file(path);
+        file.setPermissions(QFileDevice::ReadOwner);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray ciphertext = file.readAll();
+            file.close();
+            setPermissionMode(path, QFileDevice::Permissions{});
+            if (!ciphertext.isEmpty()) {
+                QByteArray decrypted = m_crypto->decrypt(ciphertext, dataKey, entry.encIv);
+                if (decrypted.isEmpty()) {
+                    m_lastError = "Tampering detected: Cannot change password because file contents on disk have been corrupted or modified.";
+                    emit lockError(path, m_lastError);
+                    return false;
+                }
+            }
+        }
     }
 
     QByteArray newPwSalt = m_crypto->generateSalt();
@@ -359,7 +432,8 @@ bool VaultService::sessionUnlockFile(const QString &path, const QString &passwor
     QByteArray dataKey = m_crypto->decryptKey(entry.encKey, pwKey);
 
     if (dataKey.isEmpty()) {
-        emit lockError(path, "Failed to decrypt data key");
+        m_lastError = "Failed to decrypt data key";
+        emit lockError(path, m_lastError);
         return false;
     }
 
@@ -370,10 +444,12 @@ bool VaultService::sessionUnlockFile(const QString &path, const QString &passwor
     if (!m_crypto->decryptFile(path, dataKey, entry.encIv)) {
         setPermissionMode(path, QFileDevice::Permissions{});
         setImmutable(path, true);
-        emit lockError(path, "Failed to decrypt file contents");
+        m_lastError = "Tampering detected: File contents were corrupted or modified on disk. Decryption failed.";
+        emit lockError(path, m_lastError);
         return false;
     }
 
+    m_lastError.clear();
     setExtendedAttribute(path, false);
 
     ActiveFileSession session;
@@ -602,6 +678,12 @@ bool VaultService::lockSingleFile(const QString &path, const QString &password, 
 {
     QString perms = getFilePermissions(path);
 
+    struct stat st;
+    qint64 inode = 0;
+    if (lstat(path.toLocal8Bit().constData(), &st) == 0) {
+        inode = static_cast<qint64>(st.st_ino);
+    }
+
     QByteArray dataKey = m_crypto->generateRandomKey();
     QByteArray fileIv;
 
@@ -629,6 +711,7 @@ bool VaultService::lockSingleFile(const QString &path, const QString &password, 
     entry.pwHash = pwHash;
     entry.originalPerms = perms;
     entry.lockedAt = QDateTime::currentSecsSinceEpoch();
+    entry.inode = inode;
 
     if (!m_db->addEntry(entry)) {
         m_crypto->decryptFile(path, dataKey, fileIv); // Rollback
@@ -636,10 +719,10 @@ bool VaultService::lockSingleFile(const QString &path, const QString &password, 
         return false;
     }
 
-    // Set extended attribute, then try chattr, then set permission to 0000
+    // Set extended attribute, then set permission to 0000, then apply immutable flag
     setExtendedAttribute(path, true);
-    setImmutable(path, true);
     setPermissionMode(path, QFileDevice::Permissions{});
+    setImmutable(path, true);
 
     return true;
 }
@@ -647,6 +730,12 @@ bool VaultService::lockSingleFile(const QString &path, const QString &password, 
 bool VaultService::lockDirectory(const QString &path, const QString &password)
 {
     QString perms = getFilePermissions(path);
+
+    struct stat dirSt;
+    qint64 dirInode = 0;
+    if (lstat(path.toLocal8Bit().constData(), &dirSt) == 0) {
+        dirInode = static_cast<qint64>(dirSt.st_ino);
+    }
 
     QByteArray pwSalt;
     QByteArray pwHash = m_crypto->hashPassword(password, pwSalt);
@@ -667,6 +756,7 @@ bool VaultService::lockDirectory(const QString &path, const QString &password)
     dirEntry.encKey = encKey;
     dirEntry.originalPerms = perms;
     dirEntry.lockedAt = QDateTime::currentSecsSinceEpoch();
+    dirEntry.inode = dirInode;
 
     if (!m_db->addEntry(dirEntry)) {
         emit lockError(path, "Failed to add directory entry to database");
@@ -682,6 +772,12 @@ bool VaultService::lockDirectory(const QString &path, const QString &password)
     while (it.hasNext()) {
         QString filePath = it.next();
         QString filePerms = getFilePermissions(filePath);
+
+        struct stat childSt;
+        qint64 childInode = 0;
+        if (lstat(filePath.toLocal8Bit().constData(), &childSt) == 0) {
+            childInode = static_cast<qint64>(childSt.st_ino);
+        }
 
         QByteArray fileIv;
         if (!m_crypto->encryptFile(filePath, folderDataKey, fileIv)) {
@@ -699,16 +795,18 @@ bool VaultService::lockDirectory(const QString &path, const QString &password)
         childEntry.encIv = fileIv;
         childEntry.originalPerms = filePerms;
         childEntry.lockedAt = dirEntry.lockedAt;
+        childEntry.inode = childInode;
         m_db->addEntry(childEntry);
 
         setExtendedAttribute(filePath, true);
         setPermissionMode(filePath, QFileDevice::Permissions{});
+        setImmutable(filePath, true);
     }
 
-    // Set extended attribute, then try chattr, then set permission to 0000
+    // Set extended attribute, then set permission to 0000, then apply immutable flag
     setExtendedAttribute(path, true);
-    setImmutable(path, true);
     setPermissionMode(path, QFileDevice::Permissions{});
+    setImmutable(path, true);
 
     return allSuccess;
 }
@@ -724,7 +822,8 @@ bool VaultService::unlockSingleFile(const QString &path, const QString &password
     QByteArray dataKey = m_crypto->decryptKey(entry.encKey, pwKey);
 
     if (dataKey.isEmpty()) {
-        emit lockError(path, "Failed to decrypt data key");
+        m_lastError = "Failed to decrypt data key";
+        emit lockError(path, m_lastError);
         return false;
     }
 
@@ -734,12 +833,14 @@ bool VaultService::unlockSingleFile(const QString &path, const QString &password
     if (!m_crypto->decryptFile(path, dataKey, entry.encIv)) {
         setPermissionMode(path, QFileDevice::Permissions{});
         setImmutable(path, true);
-        emit lockError(path, "Failed to decrypt file contents");
+        m_lastError = "Tampering detected: File contents were corrupted or modified on disk. Decryption failed.";
+        emit lockError(path, m_lastError);
         return false;
     }
 
     setExtendedAttribute(path, false);
     m_db->removeEntry(path);
+    m_lastError.clear();
 
     return true;
 }
@@ -787,16 +888,37 @@ bool VaultService::unlockDirectory(const QString &path, const QString &password)
 
 bool VaultService::setImmutable(const QString &path, bool immutable)
 {
-    // Try direct chattr (succeeds if running as root or process has CAP_LINUX_IMMUTABLE)
-    QStringList chattrArgs;
-    chattrArgs << (immutable ? "+i" : "-i") << path;
-    if (QProcess::execute("chattr", chattrArgs) == 0) {
+    QString flag = immutable ? "+i" : "-i";
+
+    // 1. Try helper binary first (may be setuid root or have CAP_LINUX_IMMUTABLE)
+    QString helperPath = QStandardPaths::findExecutable("bubble-vault-helper");
+    if (helperPath.isEmpty()) {
+        QString appDirHelper = QCoreApplication::applicationDirPath() + "/bubble-vault-helper";
+        if (QFile::exists(appDirHelper)) {
+            helperPath = appDirHelper;
+        } else if (QFile::exists("/usr/local/bin/bubble-vault-helper")) {
+            helperPath = "/usr/local/bin/bubble-vault-helper";
+        } else if (QFile::exists(m_configDir + "/bin/bubble-vault-helper")) {
+            helperPath = m_configDir + "/bin/bubble-vault-helper";
+        }
+    }
+
+    if (!helperPath.isEmpty()) {
+        QProcess proc;
+        proc.start(helperPath, {flag, path});
+        if (proc.waitForFinished(1000) && proc.exitCode() == 0) {
+            return true;
+        }
+    }
+
+    // 2. Try direct chattr (succeeds if running as root or process has CAP_LINUX_IMMUTABLE)
+    QProcess chattrProc;
+    chattrProc.start("chattr", {flag, path});
+    if (chattrProc.waitForFinished(1000) && chattrProc.exitCode() == 0) {
         return true;
     }
 
-    // In desktop environments and user sessions, non-root users do not possess
-    // CAP_LINUX_IMMUTABLE. Invoking pkexec during UI operations blocks the GUI thread
-    // and fails when no polkit agent is active. Direct chattr is best-effort.
+    // Direct chattr is best-effort if helper is not privileged.
     // The item is fully secured via AES-256-GCM encryption, 0000 permissions, and xattrs.
     return true;
 }

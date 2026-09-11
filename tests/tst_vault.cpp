@@ -23,6 +23,8 @@ private slots:
     void testVaultServiceSessionFolder();
     void testVaultServiceSessionFile();
     void testVaultServiceBruteForceRateLimit();
+    void testVaultServiceGhostEntryOnRecreation();
+    void testVaultServiceTamperDetection();
 };
 
 void TestVault::testCryptoEngineHashVerify()
@@ -158,6 +160,7 @@ void TestVault::testVaultDatabaseCrud()
     entry.originalPerms = "0644";
     entry.lockedAt = 123456789;
     entry.isOwnPassword = true;
+    entry.inode = 987654321;
 
     QVERIFY(db.addEntry(entry));
     QVERIFY(db.hasEntry("/test/path/file.txt"));
@@ -166,6 +169,7 @@ void TestVault::testVaultDatabaseCrud()
     QCOMPARE(found.path, entry.path);
     QCOMPARE(found.type, entry.type);
     QCOMPARE(found.originalPerms, entry.originalPerms);
+    QCOMPARE(found.inode, entry.inode);
 
     entry.pwHash = "updatedhash";
     QVERIFY(db.updateEntry(entry));
@@ -516,5 +520,88 @@ void TestVault::testVaultServiceSessionFile()
     }
 }
 
+void TestVault::testVaultServiceGhostEntryOnRecreation()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    QString configDir = tempDir.filePath("config");
+    QString testFile = tempDir.filePath("ghost_file.txt");
+
+    {
+        QFile f(testFile);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("Secret original content");
+        f.close();
+    }
+
+    VaultService vault(configDir);
+    QVERIFY(vault.lockItem(testFile, "Pass123"));
+    QVERIFY(vault.isLocked(testFile));
+
+    // Simulate external deletion (e.g. sudo rm ghost_file.txt)
+    QFile::remove(testFile);
+    QVERIFY(!QFile::exists(testFile));
+
+    // isLocked should detect the file was deleted on disk and return false
+    QVERIFY(!vault.isLocked(testFile));
+
+    // Simulate recreation of a new file with the exact same name
+    {
+        QFile f(testFile);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("Brand new user file with same name");
+        f.close();
+    }
+
+    // Newly created file should NOT be considered locked
+    QVERIFY(!vault.isLocked(testFile));
+    QVERIFY(vault.lastError().isEmpty());
+}
+
+void TestVault::testVaultServiceTamperDetection()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    QString configDir = tempDir.filePath("config");
+    QString testFile = tempDir.filePath("tamper_file.txt");
+
+    {
+        QFile f(testFile);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("Confidential financial records");
+        f.close();
+    }
+
+    VaultService vault(configDir);
+    QVERIFY(vault.lockItem(testFile, "LockPassword123"));
+    QVERIFY(vault.isLocked(testFile));
+
+    // Simulate external tampering (e.g. sudo nano or disk corruption)
+    {
+        QFile f(testFile);
+        f.setPermissions(QFileDevice::WriteOwner | QFileDevice::ReadOwner);
+        QVERIFY(f.open(QIODevice::ReadWrite));
+        QByteArray data = f.readAll();
+        // Corrupt ciphertext bytes
+        if (data.size() > 5) {
+            data[data.size() - 5] = ~data[data.size() - 5];
+        }
+        f.seek(0);
+        f.write(data);
+        f.close();
+        f.setPermissions(QFileDevice::Permissions{});
+    }
+
+    // Attempting to unlock with correct password should fail due to GCM auth tag mismatch
+    QVERIFY(!vault.unlockItem(testFile, "LockPassword123"));
+    // Error message must specifically report tampering
+    QVERIFY(vault.lastError().contains("Tampering detected"));
+
+    // Attempting to change password on tampered file should also be rejected
+    QVERIFY(!vault.changePassword(testFile, "LockPassword123", "NewSecretPass456"));
+    QVERIFY(vault.lastError().contains("Tampering detected"));
+}
+
 QTEST_MAIN(TestVault)
 #include "tst_vault.moc"
+

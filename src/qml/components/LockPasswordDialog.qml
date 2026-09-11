@@ -181,6 +181,8 @@ Q.Dialog {
                 if (rem > 0) {
                     root.lockoutSeconds = rem
                     root.errorText = "Too many failed attempts. Try again in " + rem + "s."
+                } else if (typeof vault !== "undefined" && vault && vault.lastError()) {
+                    root.errorText = vault.lastError()
                 } else {
                     root.errorText = "Access Denied: Incorrect password."
                 }

@@ -98,7 +98,8 @@ bool VaultDatabase::createTables()
             enc_salt    BLOB,
             original_perms TEXT,
             locked_at   INTEGER NOT NULL,
-            is_own_password INTEGER DEFAULT 0
+            is_own_password INTEGER DEFAULT 0,
+            inode       INTEGER DEFAULT 0
         )
     )";
 
@@ -106,6 +107,9 @@ bool VaultDatabase::createTables()
         qWarning() << "Failed to create locked_items table:" << query.lastError().text();
         return false;
     }
+
+    // Ensure inode column exists for backward compatibility with existing databases
+    query.exec("ALTER TABLE locked_items ADD COLUMN inode INTEGER DEFAULT 0");
 
     QString createActiveSessions = R"(
         CREATE TABLE IF NOT EXISTS active_sessions (
@@ -130,8 +134,8 @@ bool VaultDatabase::addEntry(const VaultEntry &entry)
     if (!db.isOpen()) return false;
 
     QSqlQuery query(db);
-    query.prepare("INSERT INTO locked_items (path, type, parent_id, pw_hash, pw_salt, enc_key, enc_iv, enc_salt, original_perms, locked_at, is_own_password) "
-                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO locked_items (path, type, parent_id, pw_hash, pw_salt, enc_key, enc_iv, enc_salt, original_perms, locked_at, is_own_password, inode) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     query.addBindValue(entry.path);
     query.addBindValue(entry.type);
     query.addBindValue(entry.parentId);
@@ -143,6 +147,7 @@ bool VaultDatabase::addEntry(const VaultEntry &entry)
     query.addBindValue(entry.originalPerms);
     query.addBindValue(entry.lockedAt);
     query.addBindValue(entry.isOwnPassword ? 1 : 0);
+    query.addBindValue(entry.inode);
 
     if (!query.exec()) {
         qWarning() << "Failed to add vault entry:" << query.lastError().text();
@@ -215,7 +220,7 @@ VaultEntry VaultDatabase::findByPath(const QString &path) const
     if (!db.isOpen()) return entry;
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, path, type, parent_id, pw_hash, pw_salt, enc_key, enc_iv, enc_salt, original_perms, locked_at, is_own_password "
+    query.prepare("SELECT id, path, type, parent_id, pw_hash, pw_salt, enc_key, enc_iv, enc_salt, original_perms, locked_at, is_own_password, inode "
                   "FROM locked_items WHERE path = ?");
     query.addBindValue(path);
 
@@ -237,6 +242,7 @@ VaultEntry VaultDatabase::findByPath(const QString &path) const
         entry.originalPerms = query.value(9).toString();
         entry.lockedAt = query.value(10).toLongLong();
         entry.isOwnPassword = query.value(11).toInt() != 0;
+        entry.inode = query.value(12).toLongLong();
     }
 
     return entry;
@@ -249,7 +255,7 @@ QList<VaultEntry> VaultDatabase::findByParentId(qint64 parentId) const
     if (!db.isOpen()) return entries;
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, path, type, parent_id, pw_hash, pw_salt, enc_key, enc_iv, enc_salt, original_perms, locked_at, is_own_password "
+    query.prepare("SELECT id, path, type, parent_id, pw_hash, pw_salt, enc_key, enc_iv, enc_salt, original_perms, locked_at, is_own_password, inode "
                   "FROM locked_items WHERE parent_id = ?");
     query.addBindValue(parentId);
 
@@ -272,6 +278,7 @@ QList<VaultEntry> VaultDatabase::findByParentId(qint64 parentId) const
         entry.originalPerms = query.value(9).toString();
         entry.lockedAt = query.value(10).toLongLong();
         entry.isOwnPassword = query.value(11).toInt() != 0;
+        entry.inode = query.value(12).toLongLong();
         entries.append(entry);
     }
 
@@ -285,7 +292,7 @@ QList<VaultEntry> VaultDatabase::allEntries() const
     if (!db.isOpen()) return entries;
 
     QSqlQuery query(db);
-    if (!query.exec("SELECT id, path, type, parent_id, pw_hash, pw_salt, enc_key, enc_iv, enc_salt, original_perms, locked_at, is_own_password FROM locked_items")) {
+    if (!query.exec("SELECT id, path, type, parent_id, pw_hash, pw_salt, enc_key, enc_iv, enc_salt, original_perms, locked_at, is_own_password, inode FROM locked_items")) {
         qWarning() << "Failed to get all vault entries:" << query.lastError().text();
         return entries;
     }
@@ -304,6 +311,7 @@ QList<VaultEntry> VaultDatabase::allEntries() const
         entry.originalPerms = query.value(9).toString();
         entry.lockedAt = query.value(10).toLongLong();
         entry.isOwnPassword = query.value(11).toInt() != 0;
+        entry.inode = query.value(12).toLongLong();
         entries.append(entry);
     }
 

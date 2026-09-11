@@ -43,6 +43,10 @@ public:
     // Brute force protection
     Q_INVOKABLE int getRemainingLockoutSeconds(const QString &path) const;
 
+    // Error reporting
+    Q_INVOKABLE QString lastError() const;
+    Q_INVOKABLE void clearLastError();
+
 signals:
     void itemLocked(const QString &path);
     void itemUnlocked(const QString &path);
@@ -95,5 +99,6 @@ private:
     QHash<QString, ActiveFileSession> m_activeFileSessions;
     QHash<QString, ActiveFolderSession> m_activeFolderSessions;
     mutable QHash<QString, RateLimitEntry> m_rateLimits;
+    QString m_lastError;
     class QTimer *m_processMonitorTimer = nullptr;
 };
