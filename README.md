@@ -13,6 +13,7 @@
 
 [Direct Download](#-direct-download-no-compile) •
 [Installation](#-installation) •
+[Uninstallation](#4-uninstallation) •
 [Secure Vault](#-secure-file--folder-vault) •
 [Features](#-core-features) •
 [Shortcuts](#-keyboard-shortcuts) •
@@ -86,6 +87,23 @@ git clone --recursive https://github.com/TattvaOrg/Bubble.git
 cd Bubble
 ./install.sh --source
 ```
+
+### 4. Uninstallation
+
+Cleanly remove Bubble and its desktop integrations:
+
+```bash
+# One-liner remote uninstaller
+curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/uninstall.sh | bash
+
+# Or run locally from cloned repository
+./uninstall.sh
+```
+
+**Uninstaller Options:**
+- `--purge` : Remove everything including configuration (`~/.config/bubble`), cache, and cryptographically shred locked vault files
+- `--keep-data` : Remove application files only, keeping your configs and vault files intact
+- `-y` : Non-interactive mode (uses safe defaults without prompting)
 
 ---
 

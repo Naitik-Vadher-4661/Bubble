@@ -170,6 +170,17 @@ fi
 
 # Handle uninstall
 if [[ $UNINSTALL -eq 1 ]]; then
+    if [[ -f "$SCRIPT_DIR/uninstall.sh" ]]; then
+        UNINSTALL_ARGS=()
+        if [[ -n "$CUSTOM_PREFIX" ]]; then
+            UNINSTALL_ARGS+=(--prefix "$CUSTOM_PREFIX")
+        fi
+        if [[ $AUTO_YES -eq 1 ]]; then
+            UNINSTALL_ARGS+=(-y)
+        fi
+        exec bash "$SCRIPT_DIR/uninstall.sh" "${UNINSTALL_ARGS[@]}"
+    fi
+
     echo "==> Uninstalling Bubble from prefix: $PREFIX"
 
     # Securely shred and destroy all locked vault files before removal
