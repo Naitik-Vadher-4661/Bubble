@@ -11,7 +11,7 @@
 [![Build](https://img.shields.io/github/actions/workflow/status/TattvaOrg/Bubble/build.yml?style=flat-square)](https://github.com/TattvaOrg/Bubble/actions)
 [![Platform](https://img.shields.io/badge/Platform-Wayland%20%7C%20Hyprland-purple?style=flat-square)](https://wayland.freedesktop.org/)
 
-[Direct Download](#-direct-download-no-compile) •
+
 [Installation](#-installation) •
 [Uninstallation](#4-uninstallation) •
 [Secure Vault](#-secure-file--folder-vault) •
@@ -34,23 +34,7 @@ Bubble is a lightweight, responsive Qt6/QML desktop file manager engineered nati
 
 ---
 
-## ⚡ Direct Download (No Compile)
 
-Get up and running immediately with the self-contained portable **AppImage** (no compilation or toolchain required):
-
-```bash
-# 1. Download the latest prebuilt AppImage
-curl -LO https://github.com/TattvaOrg/Bubble/releases/latest/download/Bubble-x86_64.AppImage
-
-# 2. Make it executable and launch
-chmod +x Bubble-x86_64.AppImage
-./Bubble-x86_64.AppImage
-```
-
-> [!TIP]
-> You can also grab bleeding-edge builds compiled directly from the `main` branch under [Continuous Releases](https://github.com/TattvaOrg/Bubble/releases/tag/continuous).
-
----
 
 ## 📦 Installation
 
@@ -86,17 +70,9 @@ curl -fsSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | 
 - `--tag <tag>`                   : Install a specific version tag *(e.g. `continuous`, `v0.6.1`)*
 - `-y` / `--yes`                  : Automatically accept dependency installs without prompting
 
-### 3. Arch Linux & CachyOS
 
-Install natively using `PKGBUILD`:
 
-```bash
-git clone --recursive https://github.com/TattvaOrg/Bubble.git
-cd Bubble
-makepkg -si
-```
-
-### 4. Complete Uninstallation & Wipeout
+### 3. Complete Uninstallation & Wipeout
 
 To completely wipe out Bubble, including all binaries, desktop integrations, configuration, cache, and cryptographically shred all locked vault files:
 
