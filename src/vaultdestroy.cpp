@@ -13,6 +13,23 @@
 
 static void unlockChattr(const QString &path)
 {
+    // Try setuid helper first
+    const QStringList helperCandidates = {
+        QCoreApplication::applicationDirPath() + "/bubble-vault-helper",
+        "/usr/local/bin/bubble-vault-helper",
+        "/usr/bin/bubble-vault-helper",
+        QDir::homePath() + "/.local/bin/bubble-vault-helper"
+    };
+    for (const auto &helper : helperCandidates) {
+        if (QFile::exists(helper)) {
+            QProcess p;
+            p.start(helper, {"unprotect", path});
+            if (p.waitForFinished(1000) && p.exitCode() == 0) {
+                return;
+            }
+        }
+    }
+
     QStringList args;
     args << "-i" << path;
     QProcess::execute("chattr", args);
@@ -28,6 +45,7 @@ static void shredAndRemove(const QString &path)
     unlockChattr(path);
 
     if (info.isDir()) {
+        QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
         QDir dir(path);
         const auto entries = dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden);
         for (const auto &entry : entries) {
@@ -36,6 +54,7 @@ static void shredAndRemove(const QString &path)
         dir.rmdir(path);
     } else {
         std::cout << "Shredding locked file: " << path.toStdString() << std::endl;
+        QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
         CryptoEngine::shredFile(path);
     }
 }

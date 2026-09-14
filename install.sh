@@ -188,23 +188,144 @@ if [[ $UNINSTALL -eq 1 ]]; then
 
     echo "==> Uninstalling Bubble from prefix: $PREFIX"
 
-    # Terminate running Bubble instances
-    if pgrep -x bubble >/dev/null 2>&1 || pgrep -f "/bubble" >/dev/null 2>&1; then
-        echo "==> Closing running Bubble application instances..."
-        pkill -TERM -x bubble 2>/dev/null || true
-        sleep 0.5
-        pkill -9 -x bubble 2>/dev/null || true
-    fi
-    pkill -9 -x bubble-vault-helper 2>/dev/null || true
+    # Terminate running Bubble instances safely and completely
+    kill_bubble_safely() {
+        local my_pid="$$"
+        local parent_pid="$PPID"
+        local pids_to_kill=()
 
-    # Securely shred and destroy all locked vault files before removal
+        local config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/bubble"
+        if command -v fuser >/dev/null 2>&1 && [[ -d "$config_dir" ]]; then
+            for cfg_item in "$config_dir" "$config_dir"/*; do
+                [[ -e "$cfg_item" ]] || continue
+                while read -r fpid; do
+                    [[ -z "$fpid" ]] && continue
+                    [[ "$fpid" == "$my_pid" || "$fpid" == "$parent_pid" ]] && continue
+                    pids_to_kill+=("$fpid")
+                done < <(fuser "$cfg_item" 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+$' || true)
+            done
+        fi
+
+        for pdir in /proc/[0-9]*; do
+            local pid="${pdir##*/}"
+            [[ "$pid" == "$my_pid" || "$pid" == "$parent_pid" ]] && continue
+
+            local cmdline=""
+            [[ -r "/proc/$pid/cmdline" ]] && cmdline="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+            if [[ "$cmdline" == *"uninstall.sh"* || "$cmdline" == *"install.sh"* || "$cmdline" == *"antigravity"* || "$cmdline" == *"agy"* ]]; then
+                continue
+            fi
+
+            local comm=""
+            [[ -r "/proc/$pid/comm" ]] && comm="$(cat "/proc/$pid/comm" 2>/dev/null || true)"
+            local exe=""
+            [[ -L "/proc/$pid/exe" ]] && exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)"
+
+            if [[ "$comm" =~ ^(bash|sh|zsh|sudo|curl|wget|python|python3|node)$ ]]; then
+                if [[ "$exe" != */bin/bubble && "$exe" != */.mount_Bubble* && "$exe" != */.mount_bubble* ]]; then
+                    continue
+                fi
+            fi
+
+            local is_bubble=0
+            if [[ "$comm" == "bubble" || "$comm" == "bubble-vault-helper" || "$comm" == "bubble-vault-destroy" || "$comm" == "hyprfm" ]]; then
+                is_bubble=1
+            elif [[ "$exe" == */bin/bubble || "$exe" == */build/*/bubble || "$exe" == */.mount_Bubble* || "$exe" == */.mount_bubble* || "$exe" == *Bubble*.AppImage* ]]; then
+                is_bubble=1
+            elif [[ "$comm" == "AppRun"* && ("$exe" == */.mount_* || "$cmdline" == *bubble* || "$cmdline" == *Bubble*) ]]; then
+                is_bubble=1
+            fi
+
+            if [[ $is_bubble -eq 1 ]]; then
+                pids_to_kill+=("$pid")
+            fi
+        done
+
+        if [[ ${#pids_to_kill[@]} -gt 0 ]]; then
+            local unique_pids=($(printf "%s\n" "${pids_to_kill[@]}" | sort -u))
+            echo "==> Closing running Bubble application instances (PIDs: ${unique_pids[*]})..."
+            kill -TERM "${unique_pids[@]}" 2>/dev/null || true
+            sleep 0.8
+            for p in "${unique_pids[@]}"; do
+                if kill -0 "$p" 2>/dev/null; then
+                    kill -9 "$p" 2>/dev/null || sudo kill -9 "$p" 2>/dev/null || true
+                fi
+            done
+        fi
+        pkill -9 -x bubble-vault-helper 2>/dev/null || true
+        for mnt in /tmp/.mount_Bubble* /tmp/.mount_bubble*; do
+            if [[ -d "$mnt" ]]; then
+                fusermount -u "$mnt" 2>/dev/null || umount -l "$mnt" 2>/dev/null || true
+            fi
+        done
+    }
+
+    kill_bubble_safely
+
+    # Securely unprotect, shred and destroy all locked vault files before removal
+    LOCKED_ITEMS=()
+    VAULT_DB="${XDG_CONFIG_HOME:-$HOME/.config}/bubble/vault.db"
+    if [[ -f "$VAULT_DB" ]]; then
+        if command -v sqlite3 >/dev/null 2>&1; then
+            while IFS= read -r item_path; do
+                [[ -n "$item_path" ]] && LOCKED_ITEMS+=("$item_path")
+            done < <(sqlite3 "$VAULT_DB" "SELECT path FROM locked_items;" 2>/dev/null || true)
+        fi
+    fi
+    for search_base in "$HOME" "$HOME/Desktop" "$HOME/Documents" "$HOME/Downloads"; do
+        if [[ -d "$search_base" ]]; then
+            while IFS= read -r found_xattr; do
+                [[ -z "$found_xattr" ]] && continue
+                [[ "$found_xattr" != /* ]] && found_xattr="/$found_xattr"
+                LOCKED_ITEMS+=("$found_xattr")
+            done < <(find "$search_base" -maxdepth 2 -exec getfattr -d -m "user.bubble.locked" {} + 2>/dev/null | grep "^# file: " | sed 's/^# file: //' || true)
+        fi
+    done
+    if [[ ${#LOCKED_ITEMS[@]} -gt 0 ]]; then
+        readarray -t LOCKED_ITEMS < <(printf "%s\n" "${LOCKED_ITEMS[@]}" | sort -u)
+    fi
+
+    if [[ ${#LOCKED_ITEMS[@]} -gt 0 ]]; then
+        echo "==> Detected Locked Vault Files & Folders (will be shredded & wiped):"
+        for item in "${LOCKED_ITEMS[@]}"; do
+            [[ -d "$item" ]] && echo "  - $item (directory)" || echo "  - $item (file)"
+        done
+    fi
+
+    echo "==> Cryptographically shredding and wiping all locked vault files..."
+    for item in "${LOCKED_ITEMS[@]}"; do
+        if [[ -e "$item" ]]; then
+            if [[ -x "$PREFIX/bin/bubble-vault-helper" ]]; then
+                "$PREFIX/bin/bubble-vault-helper" unprotect "$item" 2>/dev/null || true
+            elif command -v bubble-vault-helper >/dev/null 2>&1; then
+                bubble-vault-helper unprotect "$item" 2>/dev/null || true
+            fi
+            chattr -R -i "$item" 2>/dev/null || sudo chattr -R -i "$item" 2>/dev/null || true
+            chmod -R 777 "$item" 2>/dev/null || sudo chmod -R 777 "$item" 2>/dev/null || true
+        fi
+    done
+
     if command -v bubble-vault-destroy >/dev/null 2>&1; then
-        echo "==> Securely shredding locked vault files..."
         bubble-vault-destroy || true
     elif [[ -x "$PREFIX/bin/bubble-vault-destroy" ]]; then
-        echo "==> Securely shredding locked vault files..."
         "$PREFIX/bin/bubble-vault-destroy" || true
     fi
+
+    for item in "${LOCKED_ITEMS[@]}"; do
+        if [[ -d "$item" ]]; then
+            chmod -R 777 "$item" 2>/dev/null || sudo chmod -R 777 "$item" 2>/dev/null || true
+            find "$item" -type f -exec shred -u -z {} + 2>/dev/null || true
+            rm -rf "$item" 2>/dev/null || sudo rm -rf "$item" 2>/dev/null || true
+        elif [[ -f "$item" ]]; then
+            chmod 777 "$item" 2>/dev/null || sudo chmod 777 "$item" 2>/dev/null || true
+            shred -u -z "$item" 2>/dev/null || rm -f "$item" 2>/dev/null || sudo rm -f "$item" 2>/dev/null || true
+        fi
+        if [[ -e "$item" ]]; then
+            chattr -R -i "$item" 2>/dev/null || sudo chattr -R -i "$item" 2>/dev/null || true
+            chmod -R 777 "$item" 2>/dev/null || sudo chmod -R 777 "$item" 2>/dev/null || true
+            rm -rf "$item" 2>/dev/null || sudo rm -rf "$item" 2>/dev/null || true
+        fi
+    done
 
     rm -f "$PREFIX/bin/bubble"
     rm -f "$PREFIX/bin/bubble-vault-destroy"
