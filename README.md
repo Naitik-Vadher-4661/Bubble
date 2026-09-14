@@ -36,7 +36,7 @@ Bubble is a lightweight, responsive Qt6/QML desktop file manager engineered nati
 
 
 
-## 📦 Installation
+## Installation
 
 ### 1. Interactive One-Liner Install
 
@@ -89,7 +89,7 @@ curl -fsSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/uninstall.sh 
 
 ---
 
-## 🔒 Secure File & Folder Vault
+## Secure File & Folder Vault
 
 Bubble includes a built-in cryptographic vault that lets you lock sensitive files and directories directly from the file manager with zero complex setup.
 
@@ -111,9 +111,9 @@ Bubble includes a built-in cryptographic vault that lets you lock sensitive file
 
 ---
 
-## ✨ Core Features
+## Core Features
 
-### 📁 Dynamic Views & Previews
+### Dynamic Views & Previews
 - **Miller Columns (`Ctrl+2`)**: Seamless hierarchical navigation through directory trees with an automatic live preview pane.
 - **Grid View (`Ctrl+1`)**: Responsive icon grid with adjustable column counts and kinetic mouse wheel zoom (`Ctrl+Scroll`).
 - **Detailed List View (`Ctrl+3`)**: Sortable columns (Name, Size, Modified, Type, Permissions, Git status).
@@ -127,7 +127,7 @@ Bubble includes a built-in cryptographic vault that lets you lock sensitive file
 
 </div>
 
-### 🚀 Desktop & Wayland Integration
+### Desktop & Wayland Integration
 - **Compositor Blur**: Native Wayland surface transparency and background blur support on Hyprland and KDE Plasma.
 - **Removable Media**: One-click mount and unmount of USB drives and partitions via UDisks2 and DBus.
 - **Async File Transfers**: Non-blocking background copy, move, and trash operations with real-time transfer speed and ETA.
@@ -178,7 +178,7 @@ Bubble is designed for efficient keyboard-first navigation:
 
 ---
 
-## 🎨 Theming & Customization
+## Theming & Customization
 
 Bubble features a modular TOML-based theme engine with hot-reloading on save.
 
@@ -211,7 +211,7 @@ Switch themes inside the app via **Settings (`Ctrl+,`)** or set `theme = "my-the
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 Bubble is architected into three distinct layers:
 
@@ -224,7 +224,7 @@ Bubble is architected into three distinct layers:
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions, bug reports, and suggestions are welcome!
 
@@ -233,9 +233,3 @@ Contributions, bug reports, and suggestions are welcome!
 3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE) © Soyeb Pervez Jim.
