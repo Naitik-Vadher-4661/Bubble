@@ -54,23 +54,39 @@ chmod +x Bubble-x86_64.AppImage
 
 ## 📦 Installation
 
-### 1. One-Liner Install (Recommended)
+### 1. Interactive One-Liner Install
 
-Downloads the prebuilt binary, places `bubble` in `~/.local/bin`, and registers desktop launcher shortcuts and icons:
+Run the official installer and pick your preferred method (1 or 2):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | bash
 ```
 
-**Installer Options:**
-- `--binary` : Download and install the prebuilt binary *(default)*
-- `--source` : Force compiling and building from source with CMake
-- `--system` : Install system-wide to `/usr/local` *(requires sudo)*
-- `--prefix <dir>` : Install to a custom directory path
-- `--tag <tag>` : Download a specific version tag *(e.g. `continuous`, `v0.6.1`)*
-- `--uninstall` : Cleanly remove Bubble from your system
+### 2. Direct One-Liners
 
-### 2. Arch Linux & CachyOS
+Choose directly between prebuilt AppImage or compiling from source:
+
+#### Option 1: Prebuilt AppImage (Recommended)
+Downloads the prebuilt binary, installs `bubble` to `~/.local/bin`, and configures desktop integration without needing build tools:
+```bash
+curl -fsSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | bash -s -- 1
+```
+
+#### Option 2: Compile from Source
+Fetches the source code, resolves dependencies, and builds natively with CMake & Ninja:
+```bash
+curl -fsSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | bash -s -- 2
+```
+
+**Additional Installer Flags:**
+- `1` / `--binary` / `--appimage` : Prebuilt binary *(default)*
+- `2` / `--source` / `--build`    : Compile from source
+- `--system`                      : Install system-wide to `/usr/local` *(requires sudo)*
+- `--prefix <dir>`                : Install to a custom directory path
+- `--tag <tag>`                   : Install a specific version tag *(e.g. `continuous`, `v0.6.1`)*
+- `-y` / `--yes`                  : Automatically accept dependency installs without prompting
+
+### 3. Arch Linux & CachyOS
 
 Install natively using `PKGBUILD`:
 
@@ -80,30 +96,20 @@ cd Bubble
 makepkg -si
 ```
 
-### 3. Build from Source
+### 4. Complete Uninstallation & Wipeout
 
-```bash
-git clone --recursive https://github.com/TattvaOrg/Bubble.git
-cd Bubble
-./install.sh --source
-```
-
-### 4. Uninstallation
-
-Cleanly remove Bubble and its desktop integrations:
+To completely wipe out Bubble, including all binaries, desktop integrations, configuration, cache, and cryptographically shred all locked vault files:
 
 ```bash
 # One-liner remote uninstaller
-curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/uninstall.sh | bash
 
 # Or run locally from cloned repository
 ./uninstall.sh
 ```
 
-**Uninstaller Options:**
-- `--purge` : Remove everything including configuration (`~/.config/bubble`), cache, and cryptographically shred locked vault files
-- `--keep-data` : Remove application files only, keeping your configs and vault files intact
-- `-y` : Non-interactive mode (uses safe defaults without prompting)
+> [!WARNING]
+> The uninstaller prompts once for confirmation (`Are you sure you want to completely wipe Bubble and all locked files? [y/N]`) and wipes everything clean. Pass `-y` to run non-interactively.
 
 ---
 

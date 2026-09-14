@@ -42,7 +42,7 @@ CHECK_DEPS=1
 AUTO_YES=0
 UNINSTALL=0
 FORCE_REBUILD=0
-INSTALL_METHOD="binary"
+INSTALL_METHOD=""
 BUBBLE_REPO="${BUBBLE_REPO:-TattvaOrg/Bubble}"
 TARGET_TAG=""
 
@@ -51,11 +51,13 @@ print_usage() {
 Bubble Installer
 
 Usage:
-  ./install.sh [options]
+  ./install.sh [method] [options]
+
+Installation Methods:
+  1, --binary, --appimage  Install prebuilt binary (AppImage) [default]
+  2, --source, --build     Build and install from source using CMake
 
 Options:
-  --binary            Install prebuilt binary (AppImage) [default]
-  --source, --build   Build and install from source using CMake
   --repo <owner/repo> GitHub repository to download from (default: TattvaOrg/Bubble)
   --tag <tag>         Specific release tag to install (e.g. continuous, v0.6.1)
   --user              Install for current user only (~/.local) [default]
@@ -70,7 +72,10 @@ Options:
   -h, --help          Show this help message
 
 Examples:
-  ./install.sh                    # Recommended: Installs prebuilt binary to ~/.local
+  ./install.sh                    # Interactive choice: AppImage or Source
+  ./install.sh 1                  # Install prebuilt AppImage
+  ./install.sh 2                  # Build and install from source
+  ./install.sh --binary           # Install prebuilt AppImage
   ./install.sh --source           # Build and install from source
   sudo ./install.sh --system      # Installs to /usr/local
   ./install.sh --uninstall        # Removes from ~/.local
@@ -79,11 +84,11 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --binary)
+        1|--binary|--appimage)
             INSTALL_METHOD="binary"
             shift
             ;;
-        --source|--build)
+        2|--source|--build)
             INSTALL_METHOD="source"
             shift
             ;;
@@ -226,9 +231,37 @@ if [[ $UNINSTALL -eq 1 ]]; then
     exit 0
 fi
 
+# Prompt for installation method if not specified via CLI
+if [[ -z "$INSTALL_METHOD" ]]; then
+    if [[ $AUTO_YES -eq 1 || ( ! -t 0 && ! -c /dev/tty ) ]]; then
+        INSTALL_METHOD="binary"
+    else
+        echo "=============================================="
+        echo "               Bubble Installer               "
+        echo "=============================================="
+        echo "Choose an installation method:"
+        echo "  1) Prebuilt AppImage (Recommended: instant download, no build tools)"
+        echo "  2) Compile from source (Clone git repo, build via CMake & Ninja)"
+        echo
+        choice=""
+        if [[ -t 0 ]]; then
+            read -r -p "Enter choice [1-2] (default: 1): " choice || choice=""
+        elif [[ -c /dev/tty ]]; then
+            read -r -p "Enter choice [1-2] (default: 1): " choice </dev/tty || choice=""
+        fi
+        if [[ "$choice" == "2" || "$choice" == "source" ]]; then
+            INSTALL_METHOD="source"
+        else
+            INSTALL_METHOD="binary"
+        fi
+        echo
+    fi
+fi
+
 echo "=============================================="
 echo "          Bubble Installation Setup           "
 echo "=============================================="
+echo " Method        : $INSTALL_METHOD"
 echo " Target Prefix : $PREFIX"
 echo " Build Type    : $BUILD_TYPE"
 echo " Build Dir     : $BUILD_DIR"

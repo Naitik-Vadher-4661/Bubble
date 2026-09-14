@@ -150,7 +150,8 @@ Q.Dialog {
                 root.locked(targetPath)
                 root.accept()
             } else {
-                root.errorText = "Failed to lock item(s). Check permissions."
+                var err = vault.lastError()
+                root.errorText = err ? err : "Failed to lock item(s). Check permissions."
             }
         } else if (mode === "unlock") {
             if (root.lockoutSeconds > 0) {

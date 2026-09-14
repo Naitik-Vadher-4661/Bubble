@@ -14,8 +14,6 @@
 set -euo pipefail
 
 AUTO_YES=0
-PURGE=0
-KEEP_DATA=0
 CUSTOM_PREFIX=""
 
 print_usage() {
@@ -26,29 +24,18 @@ Usage:
   ./uninstall.sh [options]
 
 Options:
-  --purge             Remove everything: binaries, configs, cache, and shred locked vaults
-  --keep-data         Remove application only, keep ~/.config/bubble and vault files
   --prefix <path>     Target a specific installation prefix
-  -y, --yes           Non-interactive mode (uses safe defaults without prompting)
+  -y, --yes           Non-interactive mode (wipe everything without prompt)
   -h, --help          Show this help message
 
 Examples:
-  ./uninstall.sh                  # Interactive removal with safety prompts
-  ./uninstall.sh --purge          # Complete cleanup including configs and shredded vaults
-  ./uninstall.sh --keep-data -y   # Silent removal keeping your configuration intact
+  ./uninstall.sh                  # Prompts confirmation, then wipes Bubble and all locked files
+  ./uninstall.sh -y               # Non-interactive complete wipeout
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --purge)
-            PURGE=1
-            shift
-            ;;
-        --keep-data)
-            KEEP_DATA=1
-            shift
-            ;;
         --prefix)
             if [[ -z "${2:-}" ]]; then
                 echo "Error: --prefix requires a directory path." >&2
@@ -199,14 +186,10 @@ fi
 TOTAL_ITEMS=$((${#USER_FILES[@]} + ${#SYSTEM_FILES[@]} + ${#USER_DIRS[@]} + ${#SYSTEM_DIRS[@]}))
 
 if [[ $TOTAL_ITEMS -eq 0 ]]; then
-    if [[ $PURGE -eq 1 && ( -d "$CONFIG_DIR" || -d "$CACHE_DIR" ) ]]; then
-        echo "==> No binaries detected, but cleaning configuration and cache (--purge requested)..."
+    if [[ -d "$CONFIG_DIR" || -d "$CACHE_DIR" || -d "$STATE_DIR" ]]; then
+        echo "==> No binaries detected, wiping configuration, cache, and state..."
         rm -rf "$CONFIG_DIR" "$CACHE_DIR" "$STATE_DIR"
-        echo "==> Configuration and cache removed successfully."
-        exit 0
-    elif [[ -d "$CONFIG_DIR" || -d "$CACHE_DIR" ]]; then
-        echo "==> No Bubble binary or desktop installation components were detected on this system."
-        echo "    (Configuration directory exists at '$CONFIG_DIR'; use './uninstall.sh --purge' to remove it.)"
+        echo "==> Cleaned successfully."
         exit 0
     else
         echo "==> No Bubble installation or configuration was detected on this system."
@@ -225,7 +208,7 @@ echo
 
 # Prompt for confirmation if running interactively
 if [[ $AUTO_YES -eq 0 ]]; then
-    read -r -p "Are you sure you want to uninstall Bubble? [y/N]: " confirm
+    read -r -p "Are you sure you want to completely wipe Bubble and all locked files? [y/N]: " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "==> Uninstallation cancelled."
         exit 0
@@ -233,31 +216,18 @@ if [[ $AUTO_YES -eq 0 ]]; then
 fi
 
 # ------------------------------------------------------------------------------
-# Vault Handling
+# 1. Cryptographically shred all locked vault files & folders
 # ------------------------------------------------------------------------------
-SHRED_VAULT=0
-if [[ $PURGE -eq 1 ]]; then
-    SHRED_VAULT=1
-elif [[ $KEEP_DATA -eq 0 && -n "$VAULT_DESTROY_BIN" && $AUTO_YES -eq 0 ]]; then
-    echo
-    echo "Secure Vault Notice:"
-    echo "If you have locked files in the Bubble Vault, they will remain encrypted with your password."
-    echo "You can choose to cryptographically shred and permanently delete locked vault files now."
-    read -r -p "Do you want to destroy and shred all locked vault files? [y/N]: " vault_confirm
-    if [[ "$vault_confirm" =~ ^[Yy]$ ]]; then
-        SHRED_VAULT=1
-    fi
-fi
-
-if [[ $SHRED_VAULT -eq 1 ]]; then
-    if [[ -n "$VAULT_DESTROY_BIN" && -x "$VAULT_DESTROY_BIN" ]]; then
-        echo "==> Cryptographically shredding locked vault files..."
-        "$VAULT_DESTROY_BIN" || true
-    fi
+if [[ -n "$VAULT_DESTROY_BIN" && -x "$VAULT_DESTROY_BIN" ]]; then
+    echo "==> Cryptographically shredding and wiping all locked vault files..."
+    "$VAULT_DESTROY_BIN" || true
+elif command -v bubble-vault-destroy >/dev/null 2>&1; then
+    echo "==> Cryptographically shredding and wiping all locked vault files..."
+    bubble-vault-destroy || true
 fi
 
 # ------------------------------------------------------------------------------
-# Remove User-Level Files
+# 2. Remove User-Level Files & Directories
 # ------------------------------------------------------------------------------
 if [[ ${#USER_FILES[@]} -gt 0 || ${#USER_DIRS[@]} -gt 0 ]]; then
     echo "==> Removing user components..."
@@ -270,7 +240,7 @@ if [[ ${#USER_FILES[@]} -gt 0 || ${#USER_DIRS[@]} -gt 0 ]]; then
 fi
 
 # ------------------------------------------------------------------------------
-# Remove System-Level Files (elevates via sudo if needed)
+# 3. Remove System-Level Files & Directories (elevates via sudo if needed)
 # ------------------------------------------------------------------------------
 if [[ ${#SYSTEM_FILES[@]} -gt 0 || ${#SYSTEM_DIRS[@]} -gt 0 ]]; then
     echo "==> Removing system components (may require sudo)..."
@@ -287,29 +257,13 @@ if [[ ${#SYSTEM_FILES[@]} -gt 0 || ${#SYSTEM_DIRS[@]} -gt 0 ]]; then
 fi
 
 # ------------------------------------------------------------------------------
-# Config & Cache Data Removal
+# 4. Remove Configuration, Cache, and State
 # ------------------------------------------------------------------------------
-REMOVE_CONFIG=0
-if [[ $PURGE -eq 1 ]]; then
-    REMOVE_CONFIG=1
-elif [[ $KEEP_DATA -eq 0 && $AUTO_YES -eq 0 && -d "$CONFIG_DIR" ]]; then
-    echo
-    read -r -p "Do you want to delete user configuration and custom themes ($CONFIG_DIR)? [y/N]: " conf_confirm
-    if [[ "$conf_confirm" =~ ^[Yy]$ ]]; then
-        REMOVE_CONFIG=1
-    fi
-fi
-
-if [[ $REMOVE_CONFIG -eq 1 ]]; then
-    echo "==> Removing configuration, cache, and application state..."
-    rm -rf "$CONFIG_DIR" "$CACHE_DIR" "$STATE_DIR"
-else
-    # Always clean harmless cache files even if configs are kept
-    rm -rf "$CACHE_DIR"
-fi
+echo "==> Removing configuration, cache, and application state..."
+rm -rf "$CONFIG_DIR" "$CACHE_DIR" "$STATE_DIR"
 
 # ------------------------------------------------------------------------------
-# Refresh Desktop & Icon Caches
+# 5. Refresh Desktop & Icon Caches
 # ------------------------------------------------------------------------------
 echo "==> Updating desktop and icon caches..."
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
@@ -328,9 +282,7 @@ fi
 
 echo
 echo "=============================================="
-echo "    Bubble has been successfully uninstalled! "
+echo "    Bubble has been completely wiped out!     "
 echo "=============================================="
-if [[ $REMOVE_CONFIG -eq 0 && -d "$CONFIG_DIR" ]]; then
-    echo " Note: Your configuration and themes in '$CONFIG_DIR' were preserved."
-fi
 echo
+exit 0

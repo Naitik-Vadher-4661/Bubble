@@ -63,7 +63,9 @@ private:
     bool unlockSingleFile(const QString &path, const QString &password);
     bool unlockDirectory(const QString &path, const QString &password);
     
-    // OS-level protection
+    // OS-level protection & privilege elevation
+    bool runHelper(const QStringList &args, bool allowElevation = false);
+    bool ensureWritable(const QString &path);
     bool setImmutable(const QString &path, bool immutable);
     bool setExtendedAttribute(const QString &path, bool locked);
     QString getFilePermissions(const QString &path) const;

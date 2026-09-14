@@ -6,6 +6,30 @@
   <vendor>Bubble File Manager</vendor>
   <vendor_url>https://github.com/TattvaOrg/Bubble</vendor_url>
 
+  <action id="org.bubble.vault.helper">
+    <description>Protect, lock or unlock vault files</description>
+    <message>Bubble requires administrator authentication to lock or modify protected files and folders.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/bubble-vault-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+  <action id="org.bubble.vault.helper.usr">
+    <description>Protect, lock or unlock vault files</description>
+    <message>Bubble requires administrator authentication to lock or modify protected files and folders.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bubble-vault-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
   <action id="org.bubble.chattr">
     <description>Protect or unprotect locked file</description>
     <message>Bubble needs elevated permissions to protect locked files with immutable flags.</message>

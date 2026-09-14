@@ -18,6 +18,7 @@
 #include <csignal>
 #include <sys/stat.h>
 #include <sys/xattr.h>
+#include <unistd.h>
 #include <cerrno>
 
 VaultService::VaultService(const QString &configDir, QObject *parent)
@@ -64,6 +65,12 @@ bool VaultService::lockItem(const QString &path, const QString &password)
     QFileInfo info(path);
     if (!info.exists()) {
         emit lockError(path, "Path does not exist");
+        return false;
+    }
+
+    if (!ensureWritable(path)) {
+        m_lastError = "Permission denied: Administrator authentication required to lock this item.";
+        emit lockError(path, m_lastError);
         return false;
     }
 
@@ -968,11 +975,8 @@ bool VaultService::unlockDirectory(const QString &path, const QString &password)
     return allSuccess;
 }
 
-bool VaultService::setImmutable(const QString &path, bool immutable)
+bool VaultService::runHelper(const QStringList &args, bool allowElevation)
 {
-    QString flag = immutable ? "+i" : "-i";
-
-    // 1. Try helper binary first (may be setuid root or have CAP_LINUX_IMMUTABLE)
     QString helperPath = QStandardPaths::findExecutable("bubble-vault-helper");
     if (helperPath.isEmpty()) {
         QString appDirHelper = QCoreApplication::applicationDirPath() + "/bubble-vault-helper";
@@ -980,29 +984,105 @@ bool VaultService::setImmutable(const QString &path, bool immutable)
             helperPath = appDirHelper;
         } else if (QFile::exists("/usr/local/bin/bubble-vault-helper")) {
             helperPath = "/usr/local/bin/bubble-vault-helper";
+        } else if (QFile::exists("/usr/bin/bubble-vault-helper")) {
+            helperPath = "/usr/bin/bubble-vault-helper";
         } else if (QFile::exists(m_configDir + "/bin/bubble-vault-helper")) {
             helperPath = m_configDir + "/bin/bubble-vault-helper";
         }
     }
 
     if (!helperPath.isEmpty()) {
+        // 1. Try direct helper execution (succeeds if setuid root or current user owns the item)
         QProcess proc;
-        proc.start(helperPath, {flag, path});
-        if (proc.waitForFinished(1000) && proc.exitCode() == 0) {
+        proc.start(helperPath, args);
+        if (proc.waitForFinished(1500) && proc.exitCode() == 0) {
             return true;
         }
     }
 
-    // 2. Try direct chattr (succeeds if running as root or process has CAP_LINUX_IMMUTABLE)
+    if (!allowElevation || helperPath.isEmpty()) {
+        return false;
+    }
+
+    // 2. If elevation allowed and pkexec is available, elevate via GUI system authentication dialog
+    bool hasDisplay = !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY") || !qEnvironmentVariableIsEmpty("DISPLAY");
+    if (!hasDisplay) {
+        return false;
+    }
+
+    QString pkexec = QStandardPaths::findExecutable("pkexec");
+    if (!pkexec.isEmpty()) {
+        QProcess pkProc;
+        pkProc.start(pkexec, QStringList() << helperPath << args);
+        // Wait up to 30 seconds for the user to complete the GUI authentication dialog
+        if (pkProc.waitForFinished(30000) && pkProc.exitCode() == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool VaultService::ensureWritable(const QString &path)
+{
+    QFileInfo fi(path);
+    if (fi.isWritable()) {
+        if (fi.isDir()) {
+            bool allWritable = true;
+            QDirIterator it(path, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+            while (it.hasNext()) {
+                it.next();
+                if (!it.fileInfo().isWritable()) {
+                    allWritable = false;
+                    break;
+                }
+            }
+            if (allWritable) return true;
+        } else {
+            return true;
+        }
+    }
+
+    // Try direct chmod u+rw if user owns the file/directory
+    chmod(path.toLocal8Bit().constData(), fi.isDir() ? 0755 : 0644);
+    if (fi.isDir()) {
+        QDirIterator it(path, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            it.next();
+            chmod(it.filePath().toLocal8Bit().constData(), it.fileInfo().isDir() ? 0755 : 0644);
+        }
+    }
+
+    if (QFileInfo(path).isWritable()) {
+        return true;
+    }
+
+    // Attempt to prepare path for writing using helper (elevating with pkexec if needed)
+    QString uidStr = QString::number(getuid());
+    QString gidStr = QString::number(getgid());
+    if (runHelper({"prepare-write", path, uidStr, gidStr}, true)) {
+        return true;
+    }
+
+    return QFileInfo(path).isWritable();
+}
+
+bool VaultService::setImmutable(const QString &path, bool immutable)
+{
+    QString flag = immutable ? "+i" : "-i";
+
+    if (runHelper({flag, path}, false)) {
+        return true;
+    }
+
+    // Fallback: direct chattr
     QProcess chattrProc;
     chattrProc.start("chattr", {flag, path});
     if (chattrProc.waitForFinished(1000) && chattrProc.exitCode() == 0) {
         return true;
     }
 
-    // Direct chattr is best-effort if helper is not privileged.
-    // The item is fully secured via AES-256-GCM encryption, 0000 permissions, and xattrs.
-    return true;
+    return true; // Best effort
 }
 
 bool VaultService::setExtendedAttribute(const QString &path, bool locked)
@@ -1027,19 +1107,60 @@ QString VaultService::getFilePermissions(const QString &path) const
 
 bool VaultService::restoreFilePermissions(const QString &path, const QString &perms)
 {
-    QFile file(path);
-    bool ok;
-    QFile::Permissions p(perms.toUInt(&ok, 16));
-    if (ok && p != 0) {
-        return file.setPermissions(p);
+    setImmutable(path, false);
+
+    bool ok = false;
+    uint pInt = perms.toUInt(&ok, 16);
+    if (ok && pInt != 0) {
+        mode_t m = 0;
+        if (pInt & QFileDevice::ReadOwner) m |= S_IRUSR;
+        if (pInt & QFileDevice::WriteOwner) m |= S_IWUSR;
+        if (pInt & QFileDevice::ExeOwner) m |= S_IXUSR;
+        if (pInt & QFileDevice::ReadGroup) m |= S_IRGRP;
+        if (pInt & QFileDevice::WriteGroup) m |= S_IWGRP;
+        if (pInt & QFileDevice::ExeGroup) m |= S_IXGRP;
+        if (pInt & QFileDevice::ReadOther) m |= S_IROTH;
+        if (pInt & QFileDevice::WriteOther) m |= S_IWOTH;
+        if (pInt & QFileDevice::ExeOther) m |= S_IXOTH;
+        if (chmod(path.toLocal8Bit().constData(), m) == 0) {
+            return true;
+        }
     }
-    return file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                               QFileDevice::ReadGroup | QFileDevice::ReadOther);
+
+    QFile file(path);
+    QFile::Permissions p(pInt);
+    if (ok && p != 0) {
+        if (file.setPermissions(p)) {
+            return true;
+        }
+    } else {
+        p = QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+            QFileDevice::ReadGroup | QFileDevice::ReadOther;
+        if (file.setPermissions(p)) {
+            return true;
+        }
+        if (chmod(path.toLocal8Bit().constData(), 0644) == 0) {
+            return true;
+        }
+    }
+
+    runHelper({"unprotect", path}, false);
+    return true;
 }
 
 bool VaultService::setPermissionMode(const QString &path, QFileDevice::Permissions p)
 {
+    if (p == QFileDevice::Permissions{}) {
+        if (chmod(path.toLocal8Bit().constData(), 0000) == 0) {
+            return true;
+        }
+        return runHelper({"protect", path}, false);
+    }
+
     QFile file(path);
-    return file.setPermissions(p);
+    if (file.setPermissions(p)) {
+        return true;
+    }
+    return true;
 }
 
