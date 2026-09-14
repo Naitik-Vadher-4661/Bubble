@@ -922,6 +922,11 @@ void FileSystemModel::setRootPath(const QString &path)
     if (m_rootPath == normalizedPath)
         return;
 
+    // Block navigating into a locked folder without an active unlocked session
+    if (m_vaultService && m_vaultService->isLocked(normalizedPath) && !m_vaultService->isSessionUnlocked(normalizedPath)) {
+        return;
+    }
+
     const QString oldRoot = m_rootPath;
 
     // Auto-relock if navigating away from a session-unlocked folder
@@ -1745,6 +1750,7 @@ QVariantMap FileSystemModel::fileProperties(const QString &path) const
         props["groupAccess"] = accessIndex(p & QFile::ReadGroup, p & QFile::WriteGroup, p & QFile::ExeGroup);
         props["otherAccess"] = accessIndex(p & QFile::ReadOther, p & QFile::WriteOther, p & QFile::ExeOther);
         props["isExecutable"] = bool(p & QFile::ExeOwner);
+        props["canEditPermissions"] = m_vaultService ? !m_vaultService->isLocked(info.absoluteFilePath()) : true;
     }
 
     return props;
@@ -2063,6 +2069,9 @@ QVariantList FileSystemModel::allInstalledApps() const
 
 bool FileSystemModel::setFilePermissions(const QString &path, int ownerAccess, int groupAccess, int otherAccess)
 {
+    if (m_vaultService && m_vaultService->isLocked(path))
+        return false;
+
     if (isTrashUri(path) || isRemoteUri(path))
         return false;
 

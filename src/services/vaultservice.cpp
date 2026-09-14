@@ -335,6 +335,10 @@ bool VaultService::sessionUnlockFolder(const QString &path, const QString &passw
     if (!folderDataKey.isEmpty()) {
         QList<VaultEntry> children = m_db->findByParentId(entry.id);
         for (const VaultEntry &child : children) {
+            if (child.isOwnPassword) {
+                // Skip child items with their own individual password (e.g. 3.txt with pass 22)
+                continue;
+            }
             setImmutable(child.path, false);
             restoreFilePermissions(child.path, child.originalPerms.isEmpty() ? "0644" : child.originalPerms);
             if (!child.encIv.isEmpty()) {
@@ -371,6 +375,10 @@ void VaultService::sessionRelockFolder(const QString &path)
     if (!folderDataKey.isEmpty() && dirEntry.id != 0) {
         QList<VaultEntry> children = m_db->findByParentId(dirEntry.id);
         for (VaultEntry child : children) {
+            if (child.isOwnPassword) {
+                // Skip child items with their own individual password
+                continue;
+            }
             if (QFile::exists(child.path)) {
                 QByteArray newIv;
                 if (m_crypto->encryptFile(child.path, folderDataKey, newIv)) {
@@ -490,6 +498,30 @@ bool VaultService::sessionOpenFile(const QString &path, const QString &password)
     return true;
 }
 
+bool VaultService::sessionOpenFileWith(const QString &path, const QString &desktopFile, const QString &password)
+{
+    if (!isSessionUnlocked(path)) {
+        if (password.isEmpty() || !sessionUnlockFile(path, password)) {
+            return false;
+        }
+    }
+
+    qint64 pid = launchAppWithDesktopFile(path, desktopFile);
+    if (pid > 0 && m_activeFileSessions.contains(path)) {
+        m_activeFileSessions[path].pid = pid;
+    }
+
+    if (!m_processMonitorTimer) {
+        m_processMonitorTimer = new QTimer(this);
+        connect(m_processMonitorTimer, &QTimer::timeout, this, &VaultService::checkRunningProcesses);
+    }
+    if (!m_processMonitorTimer->isActive()) {
+        m_processMonitorTimer->start(1000);
+    }
+
+    return true;
+}
+
 void VaultService::sessionRelockFile(const QString &path)
 {
     if (!m_activeFileSessions.contains(path)) {
@@ -553,6 +585,10 @@ void VaultService::checkRunningProcesses()
                     }
                 }
             }
+            if (!isAlive && sess.graceTicks > 0) {
+                sess.graceTicks--;
+                isAlive = true; // still within grace period while app initializes
+            }
         }
 
         if (!isAlive) {
@@ -569,6 +605,69 @@ void VaultService::checkRunningProcesses()
     }
 }
 
+qint64 VaultService::launchAppWithDesktopFile(const QString &filePath, const QString &desktopFile)
+{
+    if (desktopFile.isEmpty())
+        return 0;
+
+    QString entryPath;
+    if (QFileInfo(desktopFile).isAbsolute() && QFile::exists(desktopFile)) {
+        entryPath = desktopFile;
+    } else {
+        QStringList searchDirs;
+        searchDirs << QDir::homePath() + "/.local/share/applications"
+                   << "/usr/local/share/applications"
+                   << "/usr/share/applications";
+        for (const QString &dir : searchDirs) {
+            QString candidate = dir + "/" + desktopFile;
+            if (QFile::exists(candidate)) {
+                entryPath = candidate;
+                break;
+            }
+        }
+    }
+
+    if (entryPath.isEmpty())
+        return 0;
+
+    QSettings entry(entryPath, QSettings::IniFormat);
+    entry.beginGroup("Desktop Entry");
+    QString execLine = entry.value("Exec").toString();
+    if (execLine.isEmpty())
+        return 0;
+
+    QStringList parts = QProcess::splitCommand(execLine);
+    if (parts.isEmpty())
+        return 0;
+
+    QString program = parts.takeFirst();
+    QStringList args;
+    bool fileAdded = false;
+    for (const QString &part : parts) {
+        if (part == "%f" || part == "%F" || part == "%u" || part == "%U") {
+            args.append(filePath);
+            fileAdded = true;
+        } else if (!part.startsWith('%')) {
+            args.append(part);
+        }
+    }
+    if (!fileAdded) {
+        args.append(filePath);
+    }
+
+    if (entry.value("Terminal").toString().compare("true", Qt::CaseInsensitive) == 0) {
+        QString term = qEnvironmentVariable("TERMINAL", QStringLiteral("kitty"));
+        args = QStringList{"-e", program} + args;
+        program = term;
+    }
+
+    qint64 pid = 0;
+    if (QProcess::startDetached(program, args, QString(), &pid) && pid > 0) {
+        return pid;
+    }
+    return 0;
+}
+
 qint64 VaultService::launchDefaultApp(const QString &filePath)
 {
     QMimeDatabase mimeDb;
@@ -581,47 +680,9 @@ qint64 VaultService::launchDefaultApp(const QString &filePath)
     if (xdgMime.waitForFinished(1000)) {
         QString desktopFile = QString::fromUtf8(xdgMime.readAllStandardOutput()).trimmed();
         if (!desktopFile.isEmpty()) {
-            QStringList searchDirs;
-            searchDirs << QDir::homePath() + "/.local/share/applications"
-                       << "/usr/local/share/applications"
-                       << "/usr/share/applications";
-            QString entryPath;
-            for (const QString &dir : searchDirs) {
-                QString candidate = dir + "/" + desktopFile;
-                if (QFile::exists(candidate)) {
-                    entryPath = candidate;
-                    break;
-                }
-            }
-
-            if (!entryPath.isEmpty()) {
-                QSettings entry(entryPath, QSettings::IniFormat);
-                entry.beginGroup("Desktop Entry");
-                QString execLine = entry.value("Exec").toString();
-                if (!execLine.isEmpty()) {
-                    QStringList parts = QProcess::splitCommand(execLine);
-                    if (!parts.isEmpty()) {
-                        QString program = parts.takeFirst();
-                        QStringList args;
-                        bool fileAdded = false;
-                        for (const QString &part : parts) {
-                            if (part == "%f" || part == "%F" || part == "%u" || part == "%U") {
-                                args.append(filePath);
-                                fileAdded = true;
-                            } else if (!part.startsWith('%')) {
-                                args.append(part);
-                            }
-                        }
-                        if (!fileAdded) {
-                            args.append(filePath);
-                        }
-
-                        qint64 pid = 0;
-                        if (QProcess::startDetached(program, args, QString(), &pid) && pid > 0) {
-                            return pid;
-                        }
-                    }
-                }
+            qint64 pid = launchAppWithDesktopFile(filePath, desktopFile);
+            if (pid > 0) {
+                return pid;
             }
         }
     }
@@ -779,6 +840,19 @@ bool VaultService::lockDirectory(const QString &path, const QString &password)
             childInode = static_cast<qint64>(childSt.st_ino);
         }
 
+        // Check if this child file is already locked with its own password
+        if (m_db->hasEntry(filePath)) {
+            VaultEntry existingChild = m_db->findByPath(filePath);
+            if (existingChild.isOwnPassword) {
+                existingChild.parentId = dirEntryId;
+                m_db->updateEntry(existingChild);
+                setExtendedAttribute(filePath, true);
+                setPermissionMode(filePath, QFileDevice::Permissions{});
+                setImmutable(filePath, true);
+                continue;
+            }
+        }
+
         QByteArray fileIv;
         if (!m_crypto->encryptFile(filePath, folderDataKey, fileIv)) {
             allSuccess = false;
@@ -867,6 +941,14 @@ bool VaultService::unlockDirectory(const QString &path, const QString &password)
     QList<VaultEntry> children = m_db->findByParentId(dirEntry.id);
     bool allSuccess = true;
     for (const VaultEntry &child : children) {
+        if (child.isOwnPassword) {
+            // Keep child locked with its own password, just decouple from parent folder
+            VaultEntry detachedChild = child;
+            detachedChild.parentId = 0;
+            m_db->updateEntry(detachedChild);
+            continue;
+        }
+
         setImmutable(child.path, false);
         restoreFilePermissions(child.path, child.originalPerms.isEmpty() ? "0644" : child.originalPerms);
         setExtendedAttribute(child.path, false);

@@ -30,6 +30,7 @@ public:
     Q_INVOKABLE void sessionRelockFolder(const QString &path);
     Q_INVOKABLE bool sessionUnlockFile(const QString &path, const QString &password);
     Q_INVOKABLE bool sessionOpenFile(const QString &path, const QString &password);
+    Q_INVOKABLE bool sessionOpenFileWith(const QString &path, const QString &desktopFile, const QString &password = QString());
     Q_INVOKABLE void sessionRelockFile(const QString &path);
     Q_INVOKABLE void relockAllSessions();
     
@@ -74,10 +75,12 @@ private:
         QString originalPerms;
         qint64 pid = 0;
         QString filePath;
+        int graceTicks = 5;
     };
 
     void checkRunningProcesses();
     qint64 launchDefaultApp(const QString &filePath);
+    qint64 launchAppWithDesktopFile(const QString &filePath, const QString &desktopFile);
 
     struct ActiveFolderSession {
         QByteArray dataKey;
