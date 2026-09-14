@@ -110,6 +110,16 @@ GioTransferWorker::GioTransferWorker(QObject *parent)
 {
 }
 
+GioTransferWorker::~GioTransferWorker()
+{
+    cancel();
+    QMutexLocker lock(&m_mutex);
+    if (m_cancellable) {
+        g_object_unref(m_cancellable);
+        m_cancellable = nullptr;
+    }
+}
+
 void GioTransferWorker::execute(const QList<TransferItem> &items, bool moveOperation)
 {
     // Reset state
@@ -120,7 +130,10 @@ void GioTransferWorker::execute(const QList<TransferItem> &items, bool moveOpera
     m_lastEmitMs = 0;
     m_lastEmittedProgress = -1.0;
 
-    m_cancellable = g_cancellable_new();
+    {
+        QMutexLocker lock(&m_mutex);
+        m_cancellable = g_cancellable_new();
+    }
     m_elapsed.start();
 
     // Indeterminate pre-scan
@@ -369,18 +382,23 @@ void GioTransferWorker::execute(const QList<TransferItem> &items, bool moveOpera
         g_object_unref(targetFile);
     }
 
-    g_object_unref(m_cancellable);
-    m_cancellable = nullptr;
+    {
+        QMutexLocker lock(&m_mutex);
+        if (m_cancellable) {
+            g_object_unref(m_cancellable);
+            m_cancellable = nullptr;
+        }
+    }
 
     emit finished(success, errorMsg);
 }
 
 void GioTransferWorker::cancel()
 {
+    QMutexLocker lock(&m_mutex);
+    m_cancelled.store(true);
     if (m_cancellable)
         g_cancellable_cancel(m_cancellable);
-    QMutexLocker lock(&m_mutex);   // same lost-wake-up guard as resume()
-    m_cancelled.store(true);
     m_pauseCondition.wakeAll();
 }
 
@@ -719,7 +737,9 @@ void GioTransferWorker::handleProgressCallback(goffset currentBytes, goffset tot
     }
 
     if (m_cancelled.load()) {
-        g_cancellable_cancel(m_cancellable);
+        QMutexLocker lock(&m_mutex);
+        if (m_cancellable)
+            g_cancellable_cancel(m_cancellable);
         return;
     }
 

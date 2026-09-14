@@ -57,6 +57,7 @@ void RemoteAccessService::connectToLocation(const QString &uri)
         // owns m_process; ~QProcess emits them synchronously on kill.
         disconnect(m_process, nullptr, this, nullptr);
         m_process->kill();
+        m_process->waitForFinished(500);
         m_process->deleteLater();
         m_process = nullptr;
     }

@@ -29,13 +29,21 @@ private:
         return filePath;
     }
 
+    static void waitResponse(QQuickImageResponse *response, int timeoutMs = 15000)
+    {
+        auto *pdfResp = qobject_cast<PdfPreviewResponse *>(response);
+        if (pdfResp && pdfResp->isFinished())
+            return;
+        QSignalSpy spy(response, &QQuickImageResponse::finished);
+        if ((!pdfResp || !pdfResp->isFinished()) && spy.isEmpty())
+            spy.wait(timeoutMs);
+    }
+
     static QImage renderAndWait(PdfPreviewProvider &provider, const QString &id,
                                 const QSize &size)
     {
         QQuickImageResponse *response = provider.requestImageResponse(id, size);
-        QSignalSpy spy(response, &QQuickImageResponse::finished);
-        if (spy.isEmpty())
-            spy.wait(15000);
+        waitResponse(response, 15000);
         QQuickTextureFactory *factory = response->textureFactory();
         const QImage image = factory ? factory->image() : QImage();
         delete factory;
@@ -60,9 +68,7 @@ private slots:
         QQuickImageResponse *response = provider.requestImageResponse(id, QSize(400, 500));
         QVERIFY(response != nullptr);
 
-        QSignalSpy spy(response, &QQuickImageResponse::finished);
-        if (spy.isEmpty())
-            QVERIFY(spy.wait(5000));
+        waitResponse(response, 5000);
 
         QQuickTextureFactory *factory = response->textureFactory();
         QVERIFY(factory != nullptr);
@@ -95,12 +101,8 @@ private slots:
 
         QQuickImageResponse *a = provider.requestImageResponse(id, QSize(400, 500));
         QQuickImageResponse *b = provider.requestImageResponse(id, QSize(400, 500));
-        QSignalSpy spyA(a, &QQuickImageResponse::finished);
-        QSignalSpy spyB(b, &QQuickImageResponse::finished);
-        if (spyA.isEmpty())
-            QVERIFY(spyA.wait(15000));
-        if (spyB.isEmpty())
-            QVERIFY(spyB.wait(15000));
+        waitResponse(a, 15000);
+        waitResponse(b, 15000);
 
         QQuickTextureFactory *fa = a->textureFactory();
         QQuickTextureFactory *fb = b->textureFactory();

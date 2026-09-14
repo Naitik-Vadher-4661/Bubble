@@ -167,14 +167,19 @@ bool PdfPreviewResponse::tryCache(const QString &key)
 
 void PdfPreviewResponse::run()
 {
+    auto finish = [this]() {
+        m_finished.store(true, std::memory_order_release);
+        emit finished();
+    };
+
     const PdfRequest request = parseRequest(m_id);
     if (request.path.isEmpty() || !QFileInfo::exists(request.path)) {
-        emit finished();
+        finish();
         return;
     }
 
     if (QStandardPaths::findExecutable(QStringLiteral("pdftoppm")).isEmpty()) {
-        emit finished();
+        finish();
         return;
     }
 
@@ -183,7 +188,7 @@ void PdfPreviewResponse::run()
     const QString key = renderKey(request.path, request.page, dpi);
 
     if (tryCache(key)) {
-        emit finished();
+        finish();
         return;
     }
 
@@ -193,7 +198,7 @@ void PdfPreviewResponse::run()
     // were queued behind it. This is the check that actually collapses the
     // duplicate first-paint requests.
     if (tryCache(key)) {
-        emit finished();
+        finish();
         return;
     }
 
@@ -218,13 +223,13 @@ void PdfPreviewResponse::run()
     });
 
     if (!proc.waitForFinished(15000) || proc.exitCode() != 0) {
-        emit finished();
+        finish();
         return;
     }
 
     const QByteArray jpeg = proc.readAllStandardOutput();
     if (jpeg.isEmpty()) {
-        emit finished();
+        finish();
         return;
     }
 
@@ -236,7 +241,7 @@ void PdfPreviewResponse::run()
         renderCache().insert(key, new QImage(m_image), static_cast<qsizetype>(cost));
     }
 
-    emit finished();
+    finish();
 }
 
 QQuickTextureFactory *PdfPreviewResponse::textureFactory() const

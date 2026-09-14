@@ -57,7 +57,7 @@ private slots:
 
         ThumbnailResponse response(path, QSize(64, 64));
         QSignalSpy spy(&response, &QQuickImageResponse::finished);
-        QVERIFY(spy.wait(5000));
+        QVERIFY(spy.count() > 0 || spy.wait(5000));
         QVERIFY(response.textureFactory() == nullptr);
         QVERIFY(!response.errorString().isEmpty());
     }

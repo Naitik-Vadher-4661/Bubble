@@ -802,7 +802,12 @@ private slots:
         QVERIFY(!saved.isNull());
         QCOMPARE(saved.size(), image.size());
 
-        clipboard->setMimeData(savedMime);
+        if (!savedMime->formats().isEmpty()) {
+            clipboard->setMimeData(savedMime);
+        } else {
+            clipboard->clear();
+            delete savedMime;
+        }
     }
 
     void testPasteClipboardImagePrefersCurrentClipboardOverWlPaste()
@@ -868,7 +873,12 @@ private slots:
         QVERIFY(!saved.isNull());
         QCOMPARE(saved.pixelColor(0, 0), QColor(Qt::red));
 
-        clipboard->setMimeData(savedMime);
+        if (!savedMime->formats().isEmpty()) {
+            clipboard->setMimeData(savedMime);
+        } else {
+            clipboard->clear();
+            delete savedMime;
+        }
     }
 
     // --- Trash (requires gio) ---

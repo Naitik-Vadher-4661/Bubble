@@ -28,6 +28,7 @@ public:
     };
 
     explicit GioTransferWorker(QObject *parent = nullptr);
+    ~GioTransferWorker() override;
 
     void execute(const QList<TransferItem> &items, bool moveOperation);
     void cancel();

@@ -63,12 +63,15 @@ add_executable(tst_undomanager tst_undomanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undomanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/xdgtrash.cpp
     ${CMAKE_SOURCE_DIR}/src/services/fileoperations.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/xdgtrash.cpp
     ${CMAKE_SOURCE_DIR}/src/services/giotransferworker.cpp
 )
 target_include_directories(tst_undomanager PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(tst_undomanager PRIVATE Qt6::Test Qt6::Core Qt6::Gui PkgConfig::GIO)
 add_test(NAME tst_undomanager COMMAND tst_undomanager)
+set_tests_properties(tst_undomanager PROPERTIES
+    RUN_SERIAL TRUE
+    TIMEOUT 120
+)
 
 add_executable(tst_previewservice tst_previewservice.cpp
     ${CMAKE_SOURCE_DIR}/src/services/previewservice.cpp
@@ -246,6 +249,10 @@ target_compile_definitions(tst_mainwindow PRIVATE
 target_link_libraries(tst_mainwindow PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::DBus Qt6::Svg Qt6::Network Qt6::Concurrent Qt6::Sql PkgConfig::ARGON2 OpenSSL::Crypto PkgConfig::GIO)
 add_dependencies(tst_mainwindow bubble)
 add_test(NAME tst_mainwindow COMMAND tst_mainwindow)
+set_tests_properties(tst_mainwindow PROPERTIES
+    RUN_SERIAL TRUE
+    TIMEOUT 120
+)
 
 # The view harnesses assert pixel geometry of a 900x600 window; a tiling
 # compositor would resize a real window, so keep them on the offscreen QPA.

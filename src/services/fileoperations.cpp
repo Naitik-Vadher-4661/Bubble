@@ -1062,6 +1062,18 @@ FileOperations::FileOperations(QObject *parent)
 {
 }
 
+FileOperations::~FileOperations()
+{
+    cancelTransfer();
+    for (auto &t : m_activeTransfers) {
+        if (t.thread) {
+            t.thread->quit();
+            t.thread->wait(2000);
+        }
+    }
+    m_activeTransfers.clear();
+}
+
 bool FileOperations::busy() const { return m_busy; }
 double FileOperations::progress() const { return m_progress; }
 QString FileOperations::statusText() const { return m_statusText; }
@@ -2558,13 +2570,15 @@ int FileOperations::startSimpleOperation(const QString &statusText, const QStrin
         const QString error = work(reportProgress);
         const bool ok = error.isEmpty();
         QMetaObject::invokeMethod(this, [this, id, ok, error]() {
+            QStringList changed;
             if (auto *t = findTransfer(id)) {
                 t->progress = 1.0;
-                emitChangedPaths(t->changedPaths);
+                changed = t->changedPaths;
             }
             m_progress = 1.0;
-            emit operationFinished(ok, error, id);
             cleanupTransfer(id);
+            emitChangedPaths(changed);
+            emit operationFinished(ok, error, id);
         }, Qt::QueuedConnection);
         runner->deleteLater();
     });
@@ -2637,15 +2651,17 @@ int FileOperations::startGioTransfer(const QVariantList &operations, bool moveOp
 
     connect(worker, &GioTransferWorker::finished, this,
             [this, id](bool success, const QString &error) {
+        QStringList changed;
         if (auto *t = findTransfer(id)) {
-            emitChangedPaths(t->changedPaths);
+            changed = t->changedPaths;
             if (success)
                 t->progress = 1.0;
         }
         if (success)
             m_progress = 1.0;
-        emit operationFinished(success, error, id);
         cleanupTransfer(id);
+        emitChangedPaths(changed);
+        emit operationFinished(success, error, id);
     });
 
     emitAggregatedState();
