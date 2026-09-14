@@ -131,7 +131,7 @@ while [[ $# -gt 0 ]]; do
             BUILD_TYPE="Debug"
             shift
             ;;
-        --rebuild)
+        -f|--force|--rebuild)
             FORCE_REBUILD=1
             shift
             ;;
@@ -254,70 +254,105 @@ install_prebuilt_binary() {
         return 1
     fi
 
-    echo "==> Searching for prebuilt Bubble AppImage on ${BUBBLE_REPO}..."
-    local candidate_urls=()
-    if [[ -n "$TARGET_TAG" ]]; then
-        candidate_urls+=(
-            "https://github.com/${BUBBLE_REPO}/releases/download/${TARGET_TAG}/Bubble-${TARGET_TAG}-x86_64.AppImage"
-            "https://github.com/${BUBBLE_REPO}/releases/download/${TARGET_TAG}/Bubble-x86_64.AppImage"
-        )
-    else
-        candidate_urls+=(
-            "https://github.com/${BUBBLE_REPO}/releases/latest/download/Bubble-x86_64.AppImage"
-            "https://github.com/${BUBBLE_REPO}/releases/download/continuous/Bubble-continuous-x86_64.AppImage"
-            "https://github.com/${BUBBLE_REPO}/releases/download/continuous/Bubble-x86_64.AppImage"
-        )
+    local repos_to_check=()
+    if [[ -n "${BUBBLE_REPO:-}" ]]; then
+        repos_to_check+=("$BUBBLE_REPO")
     fi
+    local origin_repo=""
+    if command -v git >/dev/null 2>&1; then
+        origin_repo="$(git remote get-url origin 2>/dev/null | sed -E 's#^.*github\.com[:/]([^/]+/[^/.]+)(\.git)?$#\1#' || true)"
+    fi
+    if [[ -n "$origin_repo" && "$origin_repo" != "${BUBBLE_REPO:-}" ]]; then
+        repos_to_check+=("$origin_repo")
+    fi
+    for fallback in "TattvaOrg/Bubble" "soyeb-jim285/hyprfm" "soyeb-jim285/Bubble"; do
+        if [[ ! " ${repos_to_check[*]} " =~ " ${fallback} " ]]; then
+            repos_to_check+=("$fallback")
+        fi
+    done
 
     local tmp_appimage
     tmp_appimage="$(mktemp /tmp/bubble-bin-XXXXXX.AppImage)"
     local success=0
     local download_url=""
+    local matched_repo=""
 
-    for url in "${candidate_urls[@]}"; do
-        echo "--> Checking $url..."
-        if command -v curl >/dev/null 2>&1; then
-            if curl -f -sSL -L "$url" -o "$tmp_appimage" 2>/dev/null; then
-                download_url="$url"
-                success=1
-                break
-            fi
-        elif command -v wget >/dev/null 2>&1; then
-            if wget -q -O "$tmp_appimage" "$url" 2>/dev/null; then
-                download_url="$url"
-                success=1
-                break
-            fi
+    for repo in "${repos_to_check[@]}"; do
+        echo "==> Searching for prebuilt Bubble AppImage on ${repo}..."
+        local candidate_urls=()
+        if [[ -n "$TARGET_TAG" ]]; then
+            candidate_urls+=(
+                "https://github.com/${repo}/releases/download/${TARGET_TAG}/Bubble-${TARGET_TAG}-x86_64.AppImage"
+                "https://github.com/${repo}/releases/download/${TARGET_TAG}/Bubble-x86_64.AppImage"
+                "https://github.com/${repo}/releases/download/${TARGET_TAG}/HyprFM-${TARGET_TAG}-x86_64.AppImage"
+                "https://github.com/${repo}/releases/download/${TARGET_TAG}/HyprFM-x86_64.AppImage"
+            )
+        else
+            candidate_urls+=(
+                "https://github.com/${repo}/releases/latest/download/Bubble-x86_64.AppImage"
+                "https://github.com/${repo}/releases/latest/download/HyprFM-x86_64.AppImage"
+                "https://github.com/${repo}/releases/download/continuous/Bubble-continuous-x86_64.AppImage"
+                "https://github.com/${repo}/releases/download/continuous/Bubble-x86_64.AppImage"
+                "https://github.com/${repo}/releases/download/continuous/HyprFM-continuous-x86_64.AppImage"
+            )
         fi
-    done
 
-    if [[ $success -eq 0 ]]; then
-        echo "--> Querying GitHub Releases API for ${BUBBLE_REPO}..."
-        local api_url="https://api.github.com/repos/${BUBBLE_REPO}/releases"
+        for url in "${candidate_urls[@]}"; do
+            echo "--> Checking $url..."
+            if command -v curl >/dev/null 2>&1; then
+                if curl -f -sSL -L "$url" -o "$tmp_appimage" 2>/dev/null; then
+                    if [[ -s "$tmp_appimage" ]] && head -c 4 "$tmp_appimage" | grep -q "ELF"; then
+                        download_url="$url"
+                        matched_repo="$repo"
+                        success=1
+                        break 2
+                    fi
+                fi
+            elif command -v wget >/dev/null 2>&1; then
+                if wget -q -O "$tmp_appimage" "$url" 2>/dev/null; then
+                    if [[ -s "$tmp_appimage" ]] && head -c 4 "$tmp_appimage" | grep -q "ELF"; then
+                        download_url="$url"
+                        matched_repo="$repo"
+                        success=1
+                        break 2
+                    fi
+                fi
+            fi
+        done
+
+        local api_url="https://api.github.com/repos/${repo}/releases"
         local found_url=""
         if command -v curl >/dev/null 2>&1; then
             found_url=$(curl -sSL -H "Accept: application/vnd.github.v3+json" "$api_url" 2>/dev/null \
-                | grep -o 'https://github.com/[^"]*Bubble[^"]*\.AppImage' | head -n 1 || true)
+                | grep -E -o 'https://github.com/[^"]*(Bubble|HyprFM)[^"]*\.AppImage' | head -n 1 || true)
         elif command -v wget >/dev/null 2>&1; then
             found_url=$(wget -qO- "$api_url" 2>/dev/null \
-                | grep -o 'https://github.com/[^"]*Bubble[^"]*\.AppImage' | head -n 1 || true)
+                | grep -E -o 'https://github.com/[^"]*(Bubble|HyprFM)[^"]*\.AppImage' | head -n 1 || true)
         fi
 
         if [[ -n "$found_url" ]]; then
             echo "--> Found release asset: $found_url"
             if command -v curl >/dev/null 2>&1 && curl -f -sSL -L "$found_url" -o "$tmp_appimage" 2>/dev/null; then
-                download_url="$found_url"
-                success=1
+                if [[ -s "$tmp_appimage" ]] && head -c 4 "$tmp_appimage" | grep -q "ELF"; then
+                    download_url="$found_url"
+                    matched_repo="$repo"
+                    success=1
+                    break
+                fi
             elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp_appimage" "$found_url" 2>/dev/null; then
-                download_url="$found_url"
-                success=1
+                if [[ -s "$tmp_appimage" ]] && head -c 4 "$tmp_appimage" | grep -q "ELF"; then
+                    download_url="$found_url"
+                    matched_repo="$repo"
+                    success=1
+                    break
+                fi
             fi
         fi
-    fi
+    done
 
     if [[ $success -eq 0 || ! -s "$tmp_appimage" ]]; then
         rm -f "$tmp_appimage"
-        echo "==> No prebuilt binary found on ${BUBBLE_REPO}."
+        echo "==> No prebuilt binary found on candidate repositories (${repos_to_check[*]})."
         return 1
     fi
 
@@ -371,7 +406,7 @@ install_prebuilt_binary() {
         if [[ $EUID -eq 0 ]]; then
             chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
             chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
-        elif command -v sudo >/dev/null 2>&1 && ( [[ $AUTO_YES -eq 1 ]] || sudo -n true 2>/dev/null ); then
+        elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
             sudo chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
             sudo chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
         fi
@@ -622,7 +657,7 @@ if [[ -x "$PREFIX/bin/bubble-vault-helper" ]]; then
     if [[ $EUID -eq 0 ]]; then
         chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
         chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
-    elif command -v sudo >/dev/null 2>&1 && ( [[ $AUTO_YES -eq 1 ]] || sudo -n true 2>/dev/null ); then
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
         sudo chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
         sudo chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
     fi
@@ -633,7 +668,7 @@ fi
 if [[ "$MODE" == "user" && -x "$PREFIX/bin/bubble-vault-helper" && ! -x "/usr/local/bin/bubble-vault-helper" ]]; then
     if [[ $EUID -eq 0 ]]; then
         install -m 4755 -o root -g root "$PREFIX/bin/bubble-vault-helper" /usr/local/bin/bubble-vault-helper 2>/dev/null || true
-    elif command -v sudo >/dev/null 2>&1 && ( [[ $AUTO_YES -eq 1 ]] || sudo -n true 2>/dev/null ); then
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
         sudo install -m 4755 -o root -g root "$PREFIX/bin/bubble-vault-helper" /usr/local/bin/bubble-vault-helper 2>/dev/null || true
     fi
 fi
