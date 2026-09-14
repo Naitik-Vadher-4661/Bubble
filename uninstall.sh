@@ -2,18 +2,18 @@
 # ==============================================================================
 # Bubble Uninstaller Script
 # ==============================================================================
-# Safely removes Bubble binaries, desktop integration, and optional user data.
+# Safely removes Bubble binaries, desktop integration, terminates running processes,
+# and permanently wipes all locked vault files/folders, configurations, and caches.
 #
 # Usage:
-#   ./uninstall.sh                # Interactive uninstallation
-#   ./uninstall.sh --purge        # Remove all files, config, cache & shred vaults
-#   ./uninstall.sh --keep-data    # Remove binaries only, preserve configs & vaults
-#   ./uninstall.sh -y             # Non-interactive removal with safe defaults
+#   ./uninstall.sh                # Non-interactive complete wipeout
+#   ./uninstall.sh --prefix <dir> # Target a specific installation prefix
+#   curl -fsSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/uninstall.sh | bash
 # ==============================================================================
 
 set -euo pipefail
 
-AUTO_YES=0
+AUTO_YES=1
 CUSTOM_PREFIX=""
 
 print_usage() {
@@ -25,12 +25,12 @@ Usage:
 
 Options:
   --prefix <path>     Target a specific installation prefix
-  -y, --yes           Non-interactive mode (wipe everything without prompt)
+  -y, --yes           Non-interactive mode (default)
   -h, --help          Show this help message
 
 Examples:
-  ./uninstall.sh                  # Prompts confirmation, then wipes Bubble and all locked files
-  ./uninstall.sh -y               # Non-interactive complete wipeout
+  ./uninstall.sh
+  curl -fsSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/uninstall.sh | bash
 USAGE
 }
 
@@ -76,6 +76,17 @@ run_elevated() {
     fi
 }
 
+# ------------------------------------------------------------------------------
+# 0. Terminate running Bubble instances
+# ------------------------------------------------------------------------------
+if pgrep -x bubble >/dev/null 2>&1 || pgrep -f "/bubble" >/dev/null 2>&1; then
+    echo "==> Closing running Bubble application instances..."
+    pkill -TERM -x bubble 2>/dev/null || true
+    sleep 0.5
+    pkill -9 -x bubble 2>/dev/null || true
+fi
+pkill -9 -x bubble-vault-helper 2>/dev/null || true
+
 USER_PREFIX="${XDG_DATA_HOME:-$HOME/.local}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/bubble"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bubble"
@@ -98,6 +109,7 @@ SYSTEM_FILES=()
 USER_DIRS=()
 SYSTEM_DIRS=()
 VAULT_DESTROY_BIN=""
+VAULT_HELPER_BIN=""
 
 for prefix in "${SCAN_PREFIXES[@]}"; do
     is_system=0
@@ -111,6 +123,9 @@ for prefix in "${SCAN_PREFIXES[@]}"; do
         if [[ -f "$target" || -L "$target" ]]; then
             if [[ -z "$VAULT_DESTROY_BIN" && "$bin" == "bubble-vault-destroy" && -x "$target" ]]; then
                 VAULT_DESTROY_BIN="$target"
+            fi
+            if [[ -z "$VAULT_HELPER_BIN" && "$bin" == "bubble-vault-helper" && -x "$target" ]]; then
+                VAULT_HELPER_BIN="$target"
             fi
             if [[ $is_system -eq 1 ]]; then
                 SYSTEM_FILES+=("$target")
@@ -166,6 +181,9 @@ fi
 
 # Check global bubble-vault-helper
 if [[ -f "/usr/local/bin/bubble-vault-helper" ]]; then
+    if [[ -z "$VAULT_HELPER_BIN" ]]; then
+        VAULT_HELPER_BIN="/usr/local/bin/bubble-vault-helper"
+    fi
     already_found=0
     for f in "${SYSTEM_FILES[@]}"; do
         if [[ "$f" == "/usr/local/bin/bubble-vault-helper" ]]; then
@@ -178,12 +196,59 @@ if [[ -f "/usr/local/bin/bubble-vault-helper" ]]; then
     fi
 fi
 
-# Fallback lookup for vault destroyer in PATH
+# Fallback lookup for binaries in PATH
 if [[ -z "$VAULT_DESTROY_BIN" ]] && command -v bubble-vault-destroy >/dev/null 2>&1; then
     VAULT_DESTROY_BIN="$(command -v bubble-vault-destroy)"
 fi
+if [[ -z "$VAULT_HELPER_BIN" ]] && command -v bubble-vault-helper >/dev/null 2>&1; then
+    VAULT_HELPER_BIN="$(command -v bubble-vault-helper)"
+fi
 
-TOTAL_ITEMS=$((${#USER_FILES[@]} + ${#SYSTEM_FILES[@]} + ${#USER_DIRS[@]} + ${#SYSTEM_DIRS[@]}))
+# ------------------------------------------------------------------------------
+# Collect all locked items from vault databases
+# ------------------------------------------------------------------------------
+VAULT_DBS=()
+if [[ -f "$CONFIG_DIR/vault.db" ]]; then
+    VAULT_DBS+=("$CONFIG_DIR/vault.db")
+fi
+if [[ $EUID -eq 0 ]]; then
+    for udir in /home/*; do
+        if [[ -f "$udir/.config/bubble/vault.db" ]]; then
+            VAULT_DBS+=("$udir/.config/bubble/vault.db")
+        fi
+    done
+    if [[ -f "/root/.config/bubble/vault.db" ]]; then
+        VAULT_DBS+=("/root/.config/bubble/vault.db")
+    fi
+fi
+
+LOCKED_ITEMS=()
+get_locked_items() {
+    local db="$1"
+    if command -v sqlite3 >/dev/null 2>&1; then
+        sqlite3 "$db" "SELECT path FROM locked_items;" 2>/dev/null || true
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c "
+import sqlite3
+try:
+    conn = sqlite3.connect('$db')
+    for row in conn.cursor().execute('SELECT path FROM locked_items'):
+        print(row[0])
+except Exception:
+    pass
+" 2>/dev/null || true
+    fi
+}
+
+for vdb in "${VAULT_DBS[@]}"; do
+    while IFS= read -r item_path; do
+        if [[ -n "$item_path" ]]; then
+            LOCKED_ITEMS+=("$item_path")
+        fi
+    done < <(get_locked_items "$vdb")
+done
+
+TOTAL_ITEMS=$((${#USER_FILES[@]} + ${#SYSTEM_FILES[@]} + ${#USER_DIRS[@]} + ${#SYSTEM_DIRS[@]} + ${#LOCKED_ITEMS[@]}))
 
 if [[ $TOTAL_ITEMS -eq 0 ]]; then
     if [[ -d "$CONFIG_DIR" || -d "$CACHE_DIR" || -d "$STATE_DIR" ]]; then
@@ -192,38 +257,69 @@ if [[ $TOTAL_ITEMS -eq 0 ]]; then
         echo "==> Cleaned successfully."
         exit 0
     else
-        echo "==> No Bubble installation or configuration was detected on this system."
+        echo "==> No Bubble installation, configuration, or locked items detected on this system."
         exit 0
     fi
 fi
 
-echo "==> Detected Bubble installation components:"
-for f in "${USER_FILES[@]}" "${SYSTEM_FILES[@]}"; do
-    echo "  - $f"
-done
-for d in "${USER_DIRS[@]}" "${SYSTEM_DIRS[@]}"; do
-    echo "  - $d (directory)"
-done
-echo
+# Print detected installation components
+if [[ ${#USER_FILES[@]} -gt 0 || ${#SYSTEM_FILES[@]} -gt 0 || ${#USER_DIRS[@]} -gt 0 || ${#SYSTEM_DIRS[@]} -gt 0 ]]; then
+    echo "==> Detected Bubble installation components:"
+    for f in "${USER_FILES[@]}" "${SYSTEM_FILES[@]}"; do
+        echo "  - $f"
+    done
+    for d in "${USER_DIRS[@]}" "${SYSTEM_DIRS[@]}"; do
+        echo "  - $d (directory)"
+    done
+    echo
+fi
 
-# Prompt for confirmation if running interactively
-if [[ $AUTO_YES -eq 0 ]]; then
-    read -r -p "Are you sure you want to completely wipe Bubble and all locked files? [y/N]: " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "==> Uninstallation cancelled."
-        exit 0
-    fi
+# Print detected locked items
+if [[ ${#LOCKED_ITEMS[@]} -gt 0 ]]; then
+    echo "==> Detected Locked Vault Files & Folders (will be shredded & wiped):"
+    for item in "${LOCKED_ITEMS[@]}"; do
+        if [[ -d "$item" ]]; then
+            echo "  - $item (directory)"
+        else
+            echo "  - $item (file)"
+        fi
+    done
+    echo
 fi
 
 # ------------------------------------------------------------------------------
 # 1. Cryptographically shred all locked vault files & folders
 # ------------------------------------------------------------------------------
-if [[ -n "$VAULT_DESTROY_BIN" && -x "$VAULT_DESTROY_BIN" ]]; then
+if [[ ${#LOCKED_ITEMS[@]} -gt 0 || -n "$VAULT_DESTROY_BIN" ]]; then
     echo "==> Cryptographically shredding and wiping all locked vault files..."
-    "$VAULT_DESTROY_BIN" || true
-elif command -v bubble-vault-destroy >/dev/null 2>&1; then
-    echo "==> Cryptographically shredding and wiping all locked vault files..."
-    bubble-vault-destroy || true
+
+    # Unlock immutable attributes & grant permissions so files can be deleted
+    for item in "${LOCKED_ITEMS[@]}"; do
+        if [[ -e "$item" ]]; then
+            if [[ -n "$VAULT_HELPER_BIN" && -x "$VAULT_HELPER_BIN" ]]; then
+                "$VAULT_HELPER_BIN" unprotect "$item" 2>/dev/null || true
+            fi
+            chattr -R -i "$item" 2>/dev/null || run_elevated chattr -R -i "$item" 2>/dev/null || true
+            chmod -R 777 "$item" 2>/dev/null || run_elevated chmod -R 777 "$item" 2>/dev/null || true
+        fi
+    done
+
+    # Run bubble-vault-destroy if available
+    if [[ -n "$VAULT_DESTROY_BIN" && -x "$VAULT_DESTROY_BIN" ]]; then
+        "$VAULT_DESTROY_BIN" || true
+    elif command -v bubble-vault-destroy >/dev/null 2>&1; then
+        bubble-vault-destroy || true
+    fi
+
+    # Fallback / guarantee shredding of all tracked locked items
+    for item in "${LOCKED_ITEMS[@]}"; do
+        if [[ -d "$item" ]]; then
+            find "$item" -type f -exec shred -u -z {} + 2>/dev/null || true
+            rm -rf "$item" 2>/dev/null || run_elevated rm -rf "$item" 2>/dev/null || true
+        elif [[ -f "$item" ]]; then
+            shred -u -z "$item" 2>/dev/null || rm -f "$item" 2>/dev/null || run_elevated rm -f "$item" 2>/dev/null || true
+        fi
+    done
 fi
 
 # ------------------------------------------------------------------------------

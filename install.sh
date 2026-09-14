@@ -188,6 +188,15 @@ if [[ $UNINSTALL -eq 1 ]]; then
 
     echo "==> Uninstalling Bubble from prefix: $PREFIX"
 
+    # Terminate running Bubble instances
+    if pgrep -x bubble >/dev/null 2>&1 || pgrep -f "/bubble" >/dev/null 2>&1; then
+        echo "==> Closing running Bubble application instances..."
+        pkill -TERM -x bubble 2>/dev/null || true
+        sleep 0.5
+        pkill -9 -x bubble 2>/dev/null || true
+    fi
+    pkill -9 -x bubble-vault-helper 2>/dev/null || true
+
     # Securely shred and destroy all locked vault files before removal
     if command -v bubble-vault-destroy >/dev/null 2>&1; then
         echo "==> Securely shredding locked vault files..."
@@ -219,6 +228,11 @@ if [[ $UNINSTALL -eq 1 ]]; then
     if [[ -f "/usr/share/polkit-1/actions/org.bubble.vault.policy" && $EUID -eq 0 ]]; then
         rm -f "/usr/share/polkit-1/actions/org.bubble.vault.policy"
     fi
+
+    # Wipe configuration, cache, and state
+    rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/bubble"
+    rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/bubble"
+    rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/bubble"
 
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache -f -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true
