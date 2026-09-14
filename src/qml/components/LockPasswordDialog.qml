@@ -13,6 +13,7 @@ Q.Dialog {
         if (mode === "lock") return targets.length > 1 ? "Lock " + targets.length + " Items" : (isDir ? "Lock Folder" : "Lock File")
         if (mode === "change") return "Change Lock Password"
         if (isPermanent) return isDir ? "Unlock Folder Permanently" : "Unlock File Permanently"
+        if (sessionOnly) return isDir ? "Unlock Folder" : "Unlock File"
         return isDir ? "Unlock Folder" : "Open Locked File"
     }
     subtitle: targets.length === 1 ? fileName : (targets.length + " items selected")
@@ -21,6 +22,7 @@ Q.Dialog {
     // "lock", "unlock", "change"
     property string mode: "unlock"
     property bool isPermanent: false
+    property bool sessionOnly: false
     property var targets: []
     property string targetPath: targets.length > 0 ? targets[0] : ""
     property bool isDir: false
@@ -72,6 +74,7 @@ Q.Dialog {
         root.targets = Array.isArray(paths) ? paths : [paths]
         root.isDir = !!isDirectory
         root.isPermanent = false
+        root.sessionOnly = false
         root.lockoutSeconds = 0
         root.errorText = ""
         root.checking = false
@@ -80,11 +83,12 @@ Q.Dialog {
         root.open()
     }
 
-    function openForUnlock(path, isDirectory) {
+    function openForUnlock(path, isDirectory, sessionOnlyFlag) {
         root.mode = "unlock"
         root.targets = [path]
         root.isDir = !!isDirectory
         root.isPermanent = false
+        root.sessionOnly = !!sessionOnlyFlag
         root.errorText = ""
         root.checking = false
         passwordField.text = ""
@@ -97,6 +101,7 @@ Q.Dialog {
         root.targets = [path]
         root.isDir = !!isDirectory
         root.isPermanent = true
+        root.sessionOnly = false
         root.errorText = ""
         root.checking = false
         passwordField.text = ""
@@ -108,6 +113,7 @@ Q.Dialog {
         root.mode = "change"
         root.targets = [path]
         root.isDir = false
+        root.sessionOnly = false
         root.lockoutSeconds = 0
         root.errorText = ""
         root.checking = false
@@ -167,6 +173,8 @@ Q.Dialog {
             } else {
                 if (root.isPermanent) {
                     ok = vault.unlockItem(targetPath, pass)
+                } else if (root.sessionOnly) {
+                    ok = vault.sessionUnlockFile(targetPath, pass)
                 } else {
                     ok = vault.sessionOpenFile(targetPath, pass)
                 }
