@@ -98,7 +98,11 @@ jobs:
             xdg-utils \
             file \
             libfuse2 \
+            libglib2.0-dev \
             libglib2.0-bin \
+            libargon2-dev \
+            libssl-dev \
+            psmisc \
             gvfs \
             dbus \
             p7zip-full
@@ -130,7 +134,7 @@ jobs:
 
       - name: Build
         run: |
-          # HYPRFM_ENABLE_QML_CACHEGEN=ON forces qmlcachegen to compile QML
+          # BUBBLE_ENABLE_QML_CACHEGEN=ON forces qmlcachegen to compile QML
           # files into the binary. The NO_CACHEGEN code path in Qt 6.7.3 was
           # silently dropping qml/components/SettingsPanel.qml from the qrc;
           # cachegen uses a different rcc path that's more reliable.

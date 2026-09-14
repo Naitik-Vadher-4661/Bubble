@@ -38,8 +38,8 @@ optdepends=(
     'perl-image-exiftool: EXIF metadata for images (via exiftool)'
     'udisks2: mount/unmount devices from sidebar'
 )
-provides=('bubble' 'hyprfm')
-conflicts=('bubble' 'hyprfm')
+provides=('bubble')
+conflicts=('bubble')
 source=(
     "${pkgname}::git+https://github.com/TattvaOrg/Bubble.git"
     "quill-icons::git+https://github.com/soyeb-jim285/quill-icons.git"
@@ -72,7 +72,6 @@ build() {
 package() {
     # Install the compiled binary
     install -Dm755 "build/src/bubble" "${pkgdir}/usr/bin/bubble"
-    ln -s bubble "${pkgdir}/usr/bin/hyprfm"
 
     # Install themes — loaded via applicationDirPath()/../themes → /usr/share/bubble/themes
     install -dm755 "${pkgdir}/usr/share/bubble/themes"

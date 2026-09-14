@@ -3,7 +3,20 @@ project(bubble VERSION 0.6.1 LANGUAGES CXX)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0 gio-unix-2.0)
-pkg_check_modules(ARGON2 REQUIRED IMPORTED_TARGET libargon2)
+pkg_check_modules(ARGON2 IMPORTED_TARGET libargon2)
+if(NOT ARGON2_FOUND)
+    find_path(ARGON2_INCLUDE_DIR NAMES argon2.h)
+    find_library(ARGON2_LIBRARY NAMES argon2)
+    if(ARGON2_INCLUDE_DIR AND ARGON2_LIBRARY)
+        add_library(PkgConfig::ARGON2 UNKNOWN IMPORTED)
+        set_target_properties(PkgConfig::ARGON2 PROPERTIES
+            IMPORTED_LOCATION "${ARGON2_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${ARGON2_INCLUDE_DIR}"
+        )
+    else()
+        message(FATAL_ERROR "libargon2 (or libargon2-dev) is required but was not found.")
+    endif()
+endif()
 find_package(OpenSSL REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)

@@ -265,7 +265,7 @@ install_prebuilt_binary() {
     if [[ -n "$origin_repo" && "$origin_repo" != "${BUBBLE_REPO:-}" ]]; then
         repos_to_check+=("$origin_repo")
     fi
-    for fallback in "TattvaOrg/Bubble" "soyeb-jim285/hyprfm" "soyeb-jim285/Bubble"; do
+    for fallback in "TattvaOrg/Bubble"; do
         if [[ ! " ${repos_to_check[*]} " =~ " ${fallback} " ]]; then
             repos_to_check+=("$fallback")
         fi
@@ -284,16 +284,12 @@ install_prebuilt_binary() {
             candidate_urls+=(
                 "https://github.com/${repo}/releases/download/${TARGET_TAG}/Bubble-${TARGET_TAG}-x86_64.AppImage"
                 "https://github.com/${repo}/releases/download/${TARGET_TAG}/Bubble-x86_64.AppImage"
-                "https://github.com/${repo}/releases/download/${TARGET_TAG}/HyprFM-${TARGET_TAG}-x86_64.AppImage"
-                "https://github.com/${repo}/releases/download/${TARGET_TAG}/HyprFM-x86_64.AppImage"
             )
         else
             candidate_urls+=(
                 "https://github.com/${repo}/releases/latest/download/Bubble-x86_64.AppImage"
-                "https://github.com/${repo}/releases/latest/download/HyprFM-x86_64.AppImage"
                 "https://github.com/${repo}/releases/download/continuous/Bubble-continuous-x86_64.AppImage"
                 "https://github.com/${repo}/releases/download/continuous/Bubble-x86_64.AppImage"
-                "https://github.com/${repo}/releases/download/continuous/HyprFM-continuous-x86_64.AppImage"
             )
         fi
 
@@ -324,10 +320,10 @@ install_prebuilt_binary() {
         local found_url=""
         if command -v curl >/dev/null 2>&1; then
             found_url=$(curl -sSL -H "Accept: application/vnd.github.v3+json" "$api_url" 2>/dev/null \
-                | grep -E -o 'https://github.com/[^"]*(Bubble|HyprFM)[^"]*\.AppImage' | head -n 1 || true)
+                | grep -E -o 'https://github.com/[^"]*Bubble[^"]*\.AppImage' | head -n 1 || true)
         elif command -v wget >/dev/null 2>&1; then
             found_url=$(wget -qO- "$api_url" 2>/dev/null \
-                | grep -E -o 'https://github.com/[^"]*(Bubble|HyprFM)[^"]*\.AppImage' | head -n 1 || true)
+                | grep -E -o 'https://github.com/[^"]*Bubble[^"]*\.AppImage' | head -n 1 || true)
         fi
 
         if [[ -n "$found_url" ]]; then
@@ -370,7 +366,7 @@ install_prebuilt_binary() {
 
     install -m 755 "$tmp_appimage" "$PREFIX/bin/bubble"
     rm -f "$tmp_appimage"
-    ln -sf bubble "$PREFIX/bin/hyprfm"
+    rm -f "$PREFIX/bin/hyprfm"
     rm -f "$PREFIX/share/applications/bubble.desktop"
 
     # Install desktop entry and icon
@@ -426,7 +422,6 @@ install_prebuilt_binary() {
     echo "=============================================="
     echo " Mode:                Prebuilt Binary (AppImage)"
     echo " Binary installed to: $PREFIX/bin/bubble"
-    echo " Legacy alias:        $PREFIX/bin/hyprfm"
     echo " Desktop file:        $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
     echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
     echo
@@ -647,8 +642,8 @@ cmake --install "$BUILD_DIR" --prefix "$PREFIX"
 # Additional integrations
 mkdir -p "$PREFIX/bin" "$PREFIX/share/applications"
 
-# Backward-compatibility symlink: hyprfm -> bubble
-ln -sf bubble "$PREFIX/bin/hyprfm"
+# Clean up any legacy hyprfm symlink/binary
+rm -f "$PREFIX/bin/hyprfm"
 # Clean up old legacy bubble.desktop if present to prevent duplicate application menu entries
 rm -f "$PREFIX/share/applications/bubble.desktop"
 
@@ -695,7 +690,6 @@ echo "=============================================="
 echo " Binary installed to: $PREFIX/bin/bubble"
 echo " Vault cleanup binary: $PREFIX/bin/bubble-vault-destroy"
 echo " Vault helper binary:  $PREFIX/bin/bubble-vault-helper"
-echo " Legacy alias:        $PREFIX/bin/hyprfm"
 echo " Desktop file:        $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
 echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
 echo

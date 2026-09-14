@@ -242,9 +242,6 @@ target_compile_definitions(tst_mainwindow PRIVATE
     BUBBLE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     BUBBLE_DATA_DIR="${CMAKE_SOURCE_DIR}"
     BUBBLE_VERSION="test"
-    HYPRFM_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    HYPRFM_DATA_DIR="${CMAKE_SOURCE_DIR}"
-    HYPRFM_VERSION="test"
 )
 target_link_libraries(tst_mainwindow PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::DBus Qt6::Svg Qt6::Network Qt6::Concurrent Qt6::Sql PkgConfig::ARGON2 OpenSSL::Crypto PkgConfig::GIO)
 add_dependencies(tst_mainwindow bubble)

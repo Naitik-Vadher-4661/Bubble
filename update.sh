@@ -141,7 +141,7 @@ if [[ $CHECK_ONLY -eq 1 ]]; then
     ORIGIN_REPO="$(git remote get-url origin 2>/dev/null | sed -E 's#^.*github\.com[:/]([^/]+/[^/.]+)(\.git)?$#\1#' || true)"
     REPOS_TO_CHECK=()
     [[ -n "$ORIGIN_REPO" ]] && REPOS_TO_CHECK+=("$ORIGIN_REPO")
-    REPOS_TO_CHECK+=("TattvaOrg/Bubble" "soyeb-jim285/hyprfm")
+    REPOS_TO_CHECK+=("TattvaOrg/Bubble")
     
     LATEST_TAG=""
     for repo in "${REPOS_TO_CHECK[@]}"; do

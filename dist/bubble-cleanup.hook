@@ -3,8 +3,6 @@ Operation = Remove
 Type = Package
 Target = bubble
 Target = bubble-git
-Target = hyprfm
-Target = hyprfm-git
 
 [Action]
 Description = Securely shredding locked vault files before Bubble removal...
