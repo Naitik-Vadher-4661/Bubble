@@ -25,7 +25,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <unistd.h>
-#ifdef HYPRFM_HAS_KWINDOWSYSTEM
+#ifdef BUBBLE_HAS_KWINDOWSYSTEM
 #include <KWindowEffects>
 #endif
 
@@ -213,8 +213,7 @@ int main(int argc, char *argv[])
     // Keep the default path fast. Full-window MSAA is expensive on many
     // Wayland/compositor stacks; opt in with BUBBLE_MSAA=2/4 if wanted.
     QSurfaceFormat fmt;
-    fmt.setSamples(qMax(0, qMax(qEnvironmentVariableIntValue("BUBBLE_MSAA"),
-                                qEnvironmentVariableIntValue("HYPRFM_MSAA"))));
+    fmt.setSamples(qMax(0, qEnvironmentVariableIntValue("BUBBLE_MSAA")));
     QSurfaceFormat::setDefaultFormat(fmt);
 
     // Bubble is a Wayland-only application (wl-copy clipboard, compositor
@@ -275,8 +274,7 @@ int main(int argc, char *argv[])
 
     // Startup timing: opt-in via BUBBLE_TIMING=1 so normal runs stay quiet.
     // Prints milliseconds from QGuiApplication construction at each phase.
-    const bool timingEnabled = (qEnvironmentVariableIntValue("BUBBLE_TIMING") != 0)
-                            || (qEnvironmentVariableIntValue("HYPRFM_TIMING") != 0);
+    const bool timingEnabled = (qEnvironmentVariableIntValue("BUBBLE_TIMING") != 0);
     QElapsedTimer startupTimer;
     startupTimer.start();
     auto mark = [&](const char *label) {
@@ -346,29 +344,10 @@ int main(int argc, char *argv[])
         return font;
     };
 
-    // Ensure config directory exists (~/.config/bubble, migrating from ~/.config/hyprfm if present)
+    // Ensure config directory exists (~/.config/bubble)
     const QString homeDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-    const QString oldConfigDir = homeDir + "/.config/hyprfm";
     const QString configDir = homeDir + "/.config/bubble";
-    if (!QDir(configDir).exists() && QDir(oldConfigDir).exists()) {
-        QDir().mkpath(configDir);
-        const QString oldConfigPath = oldConfigDir + "/config.toml";
-        const QString newConfigPath = configDir + "/config.toml";
-        if (QFile::exists(oldConfigPath) && !QFile::exists(newConfigPath)) {
-            QFile::copy(oldConfigPath, newConfigPath);
-        }
-        const QString oldThemesDir = oldConfigDir + "/themes";
-        const QString newThemesDir = configDir + "/themes";
-        if (QDir(oldThemesDir).exists() && !QDir(newThemesDir).exists()) {
-            QDir().mkpath(newThemesDir);
-            QDir themes(oldThemesDir);
-            for (const QString &file : themes.entryList(QDir::Files)) {
-                QFile::copy(oldThemesDir + "/" + file, newThemesDir + "/" + file);
-            }
-        }
-    } else {
-        QDir().mkpath(configDir);
-    }
+    QDir().mkpath(configDir);
     const QString configPath = configDir + "/config.toml";
 
     auto firstExistingDir = [](const QStringList &paths) {
@@ -384,8 +363,6 @@ int main(int argc, char *argv[])
     const QString dataDir = firstExistingDir({
         QDir(appDir).filePath("../share/bubble"),
         QDir(appDir).filePath("../../share/bubble"),
-        QDir(appDir).filePath("../share/hyprfm"),
-        QDir(appDir).filePath("../../share/hyprfm"),
         QStringLiteral(BUBBLE_DATA_DIR),
         QStringLiteral(BUBBLE_SOURCE_DIR),
     });
@@ -399,7 +376,7 @@ int main(int argc, char *argv[])
     if (!dataDir.isEmpty())
         themeSearchPaths.prepend(QDir(dataDir).filePath("themes"));
 
-    // User themes come first so ~/.config/bubble/themes (or legacy ~/.config/hyprfm/themes)
+    // User themes come first so ~/.config/bubble/themes
     // can add to or override the bundled set.
     QStringList themeDirs;
     const QString userThemesDir = configDir + "/themes";
@@ -413,8 +390,6 @@ int main(int argc, char *argv[])
             sample.write(kExampleTheme);
     }
     themeDirs.append(QDir::cleanPath(userThemesDir));
-    if (QDir(oldConfigDir + "/themes").exists())
-        themeDirs.append(QDir::cleanPath(oldConfigDir + "/themes"));
     const QString themesDir = firstExistingDir(themeSearchPaths);
     if (!themesDir.isEmpty())
         themeDirs.append(themesDir);
@@ -646,8 +621,7 @@ int main(int argc, char *argv[])
     QString installedMainQml;
     if (!dataDir.isEmpty()) {
         const QString candBubble = QDir(dataDir).filePath(QStringLiteral("Bubble/qml/Main.qml"));
-        const QString candHyprFM = QDir(dataDir).filePath(QStringLiteral("HyprFM/qml/Main.qml"));
-        installedMainQml = QFile::exists(candBubble) ? candBubble : candHyprFM;
+        installedMainQml = QFile::exists(candBubble) ? candBubble : QString();
     }
 
     // The qrc module is qmlcachegen-compiled, so loading it skips parsing
@@ -682,7 +656,7 @@ int main(int argc, char *argv[])
         if (!window)
             return;
 
-#ifdef HYPRFM_HAS_KWINDOWSYSTEM
+#ifdef BUBBLE_HAS_KWINDOWSYSTEM
         // KWin blur only shows through translucent content; Hyprland keeps
         // using compositor rules against the same transparent window surface.
         const bool blurRequested = config->transparencyEnabled();

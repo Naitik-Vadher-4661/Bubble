@@ -6,15 +6,10 @@ on:
       - main
     tags:
       - 'v*'
-  # Build and test pull requests too. Everything that publishes -- AppImage,
-  # Flatpak, the release job -- is gated on refs/tags/v, so a PR run only
-  # configures, builds and runs the test suite. Without this a PR could add a
-  # runtime dependency the package never ships and no amount of review would
-  # catch it; that is exactly how the nix flake shipped with archive handling
-  # and icons broken.
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -103,13 +98,17 @@ jobs:
             xdg-utils \
             file \
             libfuse2 \
+            libglib2.0-dev \
             libglib2.0-bin \
+            libargon2-dev \
+            libssl-dev \
+            psmisc \
             gvfs \
             dbus \
             p7zip-full
 
       - name: Build QtWayland from source
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         # aqtinstall's Linux desktop Qt 6.7.3 ships the QtWayland libs
         # but omits the wayland-graphics-integration-client plugins
         # (libqt-plugin-wayland-egl.so etc.), so Qt can't find a client
@@ -135,7 +134,7 @@ jobs:
 
       - name: Build
         run: |
-          # HYPRFM_ENABLE_QML_CACHEGEN=ON forces qmlcachegen to compile QML
+          # BUBBLE_ENABLE_QML_CACHEGEN=ON forces qmlcachegen to compile QML
           # files into the binary. The NO_CACHEGEN code path in Qt 6.7.3 was
           # silently dropping qml/components/SettingsPanel.qml from the qrc;
           # cachegen uses a different rcc path that's more reliable.
@@ -157,12 +156,12 @@ jobs:
           dbus-run-session -- ctest --test-dir build --output-on-failure --parallel 4 --timeout 300
 
       - name: Install into AppDir
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         run: |
           DESTDIR="$GITHUB_WORKSPACE/AppDir" cmake --install build
 
       - name: Download linuxdeploy and Qt plugin
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         run: |
           wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage
@@ -175,9 +174,9 @@ jobs:
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
 
       - name: Build AppImage
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'continuous' }}
           # Force linuxdeploy-plugin-qt to bundle the Wayland platform plugin
           # alongside xcb. Without this, Ubuntu's GNOME Wayland session loads
           # an empty platform and the window renders black.
@@ -221,16 +220,18 @@ jobs:
             "${deploy_deps_args[@]}" \
             --output appimage
 
+          cp "Bubble-${TAG_NAME}-x86_64.AppImage" "Bubble-x86_64.AppImage"
+
       - name: Verify bundled Wayland client integrations
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         run: |
           test -d AppDir/usr/plugins/wayland-graphics-integration-client
           test -n "$(ls -A AppDir/usr/plugins/wayland-graphics-integration-client)"
 
       - name: Smoke-test AppImage
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'continuous' }}
         # Boot the freshly-built AppImage on the offscreen QPA platform and
         # capture its stderr. We're not trying to render anything — we just
         # want Qt to load every QML type referenced from Main.qml so that
@@ -264,15 +265,15 @@ jobs:
           echo "Smoke test passed."
 
       - name: Upload AppImage artifact
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: bubble-appimage
-          path: Bubble-${{ github.ref_name }}-x86_64.AppImage
+          path: Bubble-*.AppImage
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-24.04
     permissions:
@@ -289,12 +290,11 @@ jobs:
 
       # ─────────────────────────────────────────────────────────────────
       # Flatpak publishing: build, sign with GPG, upload the ostree repo
-      # to soyeb-jim285/bubble-flatpak-repo (served at bubble.soyebjim.me
-      # via GitHub Pages) and export a single-file bundle as a release
-      # asset. Gated on tag pushes only so main-branch CI stays fast.
-
+      # Gated on tag pushes and presence of signing secrets.
       - name: Install Flatpak tooling
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && env.GPG_KEY != ''
+        env:
+          GPG_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
         run: |
           sudo apt-get install -y flatpak flatpak-builder
           flatpak remote-add --user --if-not-exists flathub \
@@ -303,7 +303,7 @@ jobs:
               org.kde.Platform//6.9 org.kde.Sdk//6.9
 
       - name: Import GPG signing key
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && env.GPG_KEY != ''
         env:
           GPG_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.FLATPAK_GPG_PASSPHRASE }}
@@ -312,10 +312,6 @@ jobs:
           mkdir -p "$HOME/.gnupg"
           chmod 700 "$HOME/.gnupg"
 
-          # Configure gpg-agent to accept passphrases via --passphrase
-          # rather than prompting through pinentry. GitHub Actions runners
-          # have no TTY, so interactive pinentry fails with "Inappropriate
-          # ioctl for device" the moment ostree tries to sign a commit.
           cat > "$HOME/.gnupg/gpg-agent.conf" <<'EOF'
           allow-loopback-pinentry
           allow-preset-passphrase
@@ -328,15 +324,9 @@ jobs:
           EOF
           gpg-connect-agent reloadagent /bye
 
-          # Import the private key
           printf '%s' "$GPG_KEY" | gpg --batch --import
           gpg --list-secret-keys --keyid-format=long
 
-          # Prime the gpg-agent cache with the passphrase by doing one
-          # dummy signing operation. Subsequent sign calls from
-          # flatpak-builder / ostree will hit the cache instead of
-          # triggering pinentry. If the key has no passphrase,
-          # --passphrase "" is a valid empty input.
           echo test | gpg --batch --yes \
               --pinentry-mode loopback \
               --passphrase "${GPG_PASSPHRASE:-}" \
@@ -344,8 +334,9 @@ jobs:
               --clearsign > /dev/null
 
       - name: Build and sign Flatpak repo
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && env.GPG_KEY != ''
         env:
+          GPG_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
           GPG_FINGERPRINT: ${{ secrets.FLATPAK_GPG_FINGERPRINT }}
         run: |
           flatpak-builder --force-clean --user \
@@ -354,17 +345,16 @@ jobs:
             --default-branch=stable \
             flatpak-build \
             io.github.soyeb_jim285.Bubble.yml
-          # Generate static deltas for efficient incremental updates
-          # and re-sign the summary file.
           flatpak build-update-repo \
             --generate-static-deltas \
             --gpg-sign="$GPG_FINGERPRINT" \
             flatpak-repo
 
       - name: Build Flatpak bundle (release asset)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && env.GPG_KEY != ''
         env:
           TAG_NAME: ${{ github.ref_name }}
+          GPG_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
           GPG_FINGERPRINT: ${{ secrets.FLATPAK_GPG_FINGERPRINT }}
         run: |
           flatpak build-bundle flatpak-repo \
@@ -373,25 +363,19 @@ jobs:
             --gpg-sign="$GPG_FINGERPRINT"
 
       - name: Publish ostree repo to bubble-flatpak-repo
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && env.DEPLOY_KEY != ''
         env:
           DEPLOY_KEY: ${{ secrets.FLATPAK_REPO_DEPLOY_KEY }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          # printf '%s\n' guarantees a terminating newline; OpenSSH's
-          # PEM parser rejects keys without one with a cryptic
-          # "error in libcrypto" message.
           printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -t ed25519,rsa,ecdsa github.com >> ~/.ssh/known_hosts 2>/dev/null
 
-          # Sanity check the key parses cleanly before SSH does.
           if ! ssh-keygen -l -f ~/.ssh/id_ed25519 > /dev/null; then
-            echo "Deploy key failed to parse. First and last lines:"
-            head -1 ~/.ssh/id_ed25519
-            tail -1 ~/.ssh/id_ed25519
+            echo "Deploy key failed to parse."
             exit 1
           fi
 
@@ -411,32 +395,50 @@ jobs:
             git push origin main
           fi
 
-      # The annotated tag's message is the release notes (scripts/release.sh
-      # writes it from a notes file), so the body is reviewed before the push
-      # instead of auto-generated from commit titles.
-      - name: Release notes from the tag message
-        if: startsWith(github.ref, 'refs/tags/v')
-        # actions/checkout leaves the tag peeled to its commit, so re-fetch
-        # the annotated tag object before reading its message.
+      - name: Prepare release notes
+        env:
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          git fetch --force --no-tags origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
-          git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" > release-notes.md
+          if [ "$IS_TAG" = "true" ]; then
+            git fetch --force --no-tags origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}" || true
+            git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" > release-notes.md || true
+            if [ ! -s release-notes.md ]; then
+              echo "Release ${GITHUB_REF_NAME}" > release-notes.md
+            fi
+          else
+            cat <<EOF > release-notes.md
+          ### Bubble Continuous Build
+          Automated pre-release build from branch \`main\` (commit \`${GITHUB_SHA:0:7}\`).
+
+          #### Download
+          - [Bubble-continuous-x86_64.AppImage](https://github.com/${GITHUB_REPOSITORY}/releases/download/continuous/Bubble-continuous-x86_64.AppImage)
+          - [Bubble-x86_64.AppImage](https://github.com/${GITHUB_REPOSITORY}/releases/download/continuous/Bubble-x86_64.AppImage)
+
+          #### Quick Run
+          \`\`\`bash
+          chmod +x Bubble-continuous-x86_64.AppImage
+          ./Bubble-continuous-x86_64.AppImage
+          \`\`\`
+          EOF
+          fi
           test -s release-notes.md
-          head -3 release-notes.md
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'continuous' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Bubble {0}', github.ref_name) || 'Bubble Continuous Build' }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           files: |
-            Bubble-${{ github.ref_name }}-x86_64.AppImage
-            Bubble-${{ github.ref_name }}-x86_64.flatpak
+            Bubble-*.AppImage
+            Bubble-*.flatpak
           body_path: release-notes.md
 
       - name: Trigger website rebuild
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && env.SITE_DISPATCH_TOKEN != ''
         env:
           GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
         run: |
           gh api repos/soyeb-jim285/bubble-site/dispatches \
-            -f event_type=new-release
+            -f event_type=new-release || true

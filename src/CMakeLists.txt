@@ -34,7 +34,6 @@ set(BUBBLE_SOURCES
 )
 
 qt_add_executable(bubble ${BUBBLE_SOURCES})
-add_executable(hyprfm ALIAS bubble)
 
 option(BUBBLE_ENABLE_PCH "Enable precompiled headers (faster builds)" ON)
 option(BUBBLE_ENABLE_UNITY_BUILD "Enable unity builds (faster clean builds)" ON)
@@ -294,15 +293,11 @@ target_compile_definitions(bubble PRIVATE
     BUBBLE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     BUBBLE_DATA_DIR="${BUBBLE_DATA_DIR}"
     BUBBLE_VERSION="${PROJECT_VERSION}"
-    HYPRFM_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    HYPRFM_DATA_DIR="${BUBBLE_DATA_DIR}"
-    HYPRFM_VERSION="${PROJECT_VERSION}"
 )
 
 if(KF6WindowSystem_FOUND)
     target_compile_definitions(bubble PRIVATE
         BUBBLE_HAS_KWINDOWSYSTEM=1
-        HYPRFM_HAS_KWINDOWSYSTEM=1
     )
 endif()
 

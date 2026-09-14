@@ -485,7 +485,7 @@ void DependencyChecker::populate()
         buildHints(QStringLiteral("ffmpeg"))
     });
 
-#ifdef HYPRFM_HAS_KWINDOWSYSTEM
+#ifdef BUBBLE_HAS_KWINDOWSYSTEM
     const bool hasKWin = true;
 #else
     const bool hasKWin = false;

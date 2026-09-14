@@ -1,159 +1,78 @@
 <div align="center">
 
-<img src="dist/io.github.soyeb_jim285.Bubble.svg" width="96" alt="Bubble logo"/>
+<img src="dist/io.github.soyeb_jim285.Bubble.svg" width="100" alt="Bubble Logo"/>
 
 # Bubble
 
-**A fast, keyboard-friendly file manager for Hyprland and Wayland desktops.**
+**A fast, modern Wayland file manager with Miller columns and a built-in Secure Vault.**
 
-[![License](https://img.shields.io/github/license/TattvaOrg/Bubble?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/TattvaOrg/Bubble?style=flat-square)](https://github.com/TattvaOrg/Bubble/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/TattvaOrg/Bubble?style=flat-square&color=emerald)](https://github.com/TattvaOrg/Bubble/releases)
 [![Build](https://img.shields.io/github/actions/workflow/status/TattvaOrg/Bubble/build.yml?style=flat-square)](https://github.com/TattvaOrg/Bubble/actions)
+[![Platform](https://img.shields.io/badge/Platform-Wayland%20%7C%20Hyprland-purple?style=flat-square)](https://wayland.freedesktop.org/)
+
+[Direct Download](#-direct-download-no-compile) •
+[Installation](#-installation) •
+[Uninstallation](#4-uninstallation) •
+[Secure Vault](#-secure-file--folder-vault) •
+[Features](#-core-features) •
+[Shortcuts](#-keyboard-shortcuts) •
+[Theming](#-theming--customization)
+
+---
+
+</div>
+
+Bubble is a lightweight, responsive Qt6/QML desktop file manager engineered natively for Wayland and Hyprland. Combining **macOS Finder-style Miller columns**, buttery-smooth kinetic scrolling, and **AES-256 encrypted file vaults**, Bubble offers the speed of a keyboard-driven workflow with the polish of a modern desktop utility.
+
+<div align="center">
+
+![Bubble Demo](docs/screenshots/demo.gif)
+*Miller column navigation with live file previews and batch operations*
 
 </div>
 
 ---
 
-Bubble is a Qt6/QML file manager designed to feel native on Hyprland: lightweight, themeable, and built around fast keyboard navigation. It pairs a polished UI with the practical features power users expect, including Miller column view, kinetic scrolling, drag & drop, async operations, rich previews, and a TOML-based theme system.
+## ⚡ Direct Download (No Compile)
 
-<div align="center">
+Get up and running immediately with the self-contained portable **AppImage** (no compilation or toolchain required):
 
-![Bubble demo](docs/screenshots/demo.gif)
-*Miller columns with a live preview pane, then bulk rename with its preview list*
+```bash
+# 1. Download the latest prebuilt AppImage
+curl -LO https://github.com/TattvaOrg/Bubble/releases/latest/download/Bubble-x86_64.AppImage
 
-</div>
+# 2. Make it executable and launch
+chmod +x Bubble-x86_64.AppImage
+./Bubble-x86_64.AppImage
+```
 
-<div align="center">
-
-![Grid view](docs/screenshots/grid-view.png)
-*Grid view with built-in icon set, themed sidebar, and live preview blur*
-
-</div>
-
----
-
-## Contents
-
-- [Features](#features)
-  - [Views](#views)
-  - [Navigation & input](#navigation--input)
-  - [File operations](#file-operations)
-  - [Look & feel](#look--feel)
-  - [Integrations](#integrations)
-- [Installation](#installation)
-  - [One-liner install](#one-liner-install)
-  - [Build from source](#build-from-source)
-  - [Arch Linux / CachyOS](#arch-linux--cachyos)
-- [Updating](#updating)
-  - [One-liner update](#one-liner-update)
-  - [Local update](#local-update)
-- [Keyboard shortcuts](#keyboard-shortcuts)
-  - [Navigation](#navigation)
-  - [Views](#views-1)
-  - [Tabs & windows](#tabs--windows)
-  - [File operations](#file-operations-1)
-- [Configuration](#configuration)
-- [Theming](#theming)
-  - [Light and dark](#light-and-dark)
-- [Architecture](#architecture)
-- [Contributing](#contributing)
-- [License](#license)
+> [!TIP]
+> You can also grab bleeding-edge builds compiled directly from the `main` branch under [Continuous Releases](https://github.com/TattvaOrg/Bubble/releases/tag/continuous).
 
 ---
 
-## Features
+## 📦 Installation
 
-### Views
+### 1. One-Liner Install (Recommended)
 
-- **Grid view** with adjustable column count (`Ctrl+Scroll` to zoom)
-- **Detailed view** with sortable columns, image/video thumbnails, and folder item counts
-- **Miller columns** (`Ctrl+2`): parent · current · live preview, the macOS Finder favorite
-- **Image and video thumbnails** in detailed and Miller views
-- **Quick preview** (`Space`): full-screen overlay for images, video (poster frame), PDFs, text, with metadata sidebar
-- **Split pane** (`F3`): work in two directories side by side
-
-<div align="center">
-
-![Miller view](docs/screenshots/miller-view.png)
-*Miller column view with rich text preview and syntax highlighting*
-
-</div>
-
-### Navigation & input
-
-- **Full keyboard navigation**: arrows, vim-friendly shortcuts, type-ahead search
-- **Tabs** with independent history per pane
-- **Path bar** with breadcrumbs and inline editing (`Ctrl+L`)
-- **Bookmarks sidebar** with drag-to-reorder, inline rename, and udisks2 device mounting
-- **Kinetic wheel scrolling** with momentum and rubber-band overscroll
-- **Rubber-band selection** in all views
-
-### File operations
-
-- **Async copy / move** via GIO with live progress, speed, ETA, and pause
-- **Drag & drop** between panes, tabs, and external apps (Wayland-native)
-- **Trash** with restore (XDG-compliant)
-- **Bulk rename**: find/replace (plain or regex), prefix/suffix, numbered sequences
-- **Compress / extract** archives
-- **Open With** dialog populated from `.desktop` entries
-- **Secure File & Folder Vault**: Lock sensitive files or directories with AES-256-GCM authenticated encryption + Argon2id key derivation, progressive brute-force rate limiting, `0000` permission lockdown, auto-relocking editing sessions, and cryptographic shredding (`bubble-vault-destroy`) upon uninstallation
-
-### Look & feel
-
-- **TOML themes** with live reload — Catppuccin Mocha/Latte and Rose Pine/Moon/Dawn bundled
-- **Built-in SVG icon set** (90+ Lucide-style icons rendered via Qt Shapes)
-- **Configurable corner radius**, fonts, animation duration
-- **Wayland compositor blur** on Hyprland plus native KWin blur on KDE Plasma
-
-### Integrations
-
-- **udisks2** mount/unmount of removable drives
-- **gvfs / gio** for SFTP, SMB and MTP (the trash is read directly and does not need it)
-- **Git status overlays** in file lists (modified, staged, untracked, …)
-- **wl-clipboard** for system clipboard
-- **bat** for syntax-highlighted text previews
-- **ffmpeg** for video poster thumbnails
-- **Poppler** for PDF page previews
-
-<div align="center">
-
-![Quick preview](docs/screenshots/quick-preview.png)
-*Quick preview overlay (Space): image preview with full metadata sidebar*
-
-</div>
-
----
-
-## Installation
-
-### One-Liner Install
-
-Run the automated installer in your terminal to build and install Bubble to `~/.local` (no root required):
+Downloads the prebuilt binary, places `bubble` in `~/.local/bin`, and registers desktop launcher shortcuts and icons:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | bash
 ```
 
-### Build from Source
-
-Clone the repository and run the automated installer:
-
-```bash
-git clone --recursive https://github.com/TattvaOrg/Bubble.git
-cd Bubble
-./install.sh
-```
-
 **Installer Options:**
-- `-y` : Automatically install missing dependencies with your package manager
-- `--system` : Install system-wide to `/usr/local` (requires `sudo`)
-- `--prefix <dir>` : Install to a custom directory
-- `--no-deps` : Skip dependency checking
-- `--uninstall` : Cleanly uninstall Bubble and shred locked files
+- `--binary` : Download and install the prebuilt binary *(default)*
+- `--source` : Force compiling and building from source with CMake
+- `--system` : Install system-wide to `/usr/local` *(requires sudo)*
+- `--prefix <dir>` : Install to a custom directory path
+- `--tag <tag>` : Download a specific version tag *(e.g. `continuous`, `v0.6.1`)*
+- `--uninstall` : Cleanly remove Bubble from your system
 
-### Arch Linux / CachyOS
+### 2. Arch Linux & CachyOS
 
-You can build and install a native `pacman` package directly:
+Install natively using `PKGBUILD`:
 
 ```bash
 git clone --recursive https://github.com/TattvaOrg/Bubble.git
@@ -161,296 +80,180 @@ cd Bubble
 makepkg -si
 ```
 
----
-
-## Updating
-
-### One-Liner Update
-
-Update an existing installation to the latest version directly from your terminal:
+### 3. Build from Source
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/update.sh | bash
-```
-
-### Local Update
-
-If you cloned the repository locally, pull updates, sync submodules, and rebuild:
-
-```bash
+git clone --recursive https://github.com/TattvaOrg/Bubble.git
 cd Bubble
-./update.sh
+./install.sh --source
 ```
 
-**Updater Options:**
-- Check for updates without applying:
-  ```bash
-  ./update.sh --check
-  ```
-- Force a clean rebuild and reinstall:
-  ```bash
-  ./update.sh --rebuild
-  ```
-- Update a system-wide installation (`/usr/local`):
-  ```bash
-  sudo ./update.sh --system
-  ```
+### 4. Uninstallation
+
+Cleanly remove Bubble and its desktop integrations:
+
+```bash
+# One-liner remote uninstaller
+curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/uninstall.sh | bash
+
+# Or run locally from cloned repository
+./uninstall.sh
+```
+
+**Uninstaller Options:**
+- `--purge` : Remove everything including configuration (`~/.config/bubble`), cache, and cryptographically shred locked vault files
+- `--keep-data` : Remove application files only, keeping your configs and vault files intact
+- `-y` : Non-interactive mode (uses safe defaults without prompting)
 
 ---
 
-## Keyboard shortcuts
+## 🔒 Secure File & Folder Vault
 
-### Navigation
+Bubble includes a built-in cryptographic vault that lets you lock sensitive files and directories directly from the file manager with zero complex setup.
 
+<div align="center">
+
+![Quick Preview](docs/screenshots/quick-preview.png)
+*Lock files instantly from context menus or with a single keyboard shortcut*
+
+</div>
+
+### Key Capabilities
+
+- **One-Key Lock/Unlock (`Ctrl+Shift+L`)**: Select any file or folder and press `Ctrl+Shift+L` (or right-click → **Lock/Unlock**) to secure it with a password.
+- **Authenticated Encryption**: Backed by **AES-256-GCM** authenticated encryption with **Argon2id** key derivation to prevent brute-force attacks.
+- **Root & Tamper Prevention**: Locked items are placed in strict permission lockdown (`0000`) and protected by Linux kernel immutable flags (`+i`), preventing deletion, renaming, or modification even under `sudo`.
+- **Intelligent Auto-Relocking**: When you unlock a file to view or edit it, Bubble monitors the active editing session in the background and automatically re-encrypts and locks it when you're finished.
+- **Visual Status Indicators**: Locked files display a secure badge in both detailed and grid views.
+- **Ghost-Lock & Corruption Protection**: Automatic integrity checks verify HMAC/GCM tags before decryption to guard against corruption or tampered data.
+
+---
+
+## ✨ Core Features
+
+### 📁 Dynamic Views & Previews
+- **Miller Columns (`Ctrl+2`)**: Seamless hierarchical navigation through directory trees with an automatic live preview pane.
+- **Grid View (`Ctrl+1`)**: Responsive icon grid with adjustable column counts and kinetic mouse wheel zoom (`Ctrl+Scroll`).
+- **Detailed List View (`Ctrl+3`)**: Sortable columns (Name, Size, Modified, Type, Permissions, Git status).
+- **Quick Preview (`Space`)**: Instant full-screen modal preview for high-resolution images, video posters, PDFs, and syntax-highlighted code.
+- **Dual-Pane Split (`F3`)**: Side-by-side independent navigation panes for rapid drag & drop and cross-folder management.
+
+<div align="center">
+
+![Miller Columns](docs/screenshots/miller-view.png)
+*Miller column navigation with rich syntax highlighting and preview pane*
+
+</div>
+
+### 🚀 Desktop & Wayland Integration
+- **Compositor Blur**: Native Wayland surface transparency and background blur support on Hyprland and KDE Plasma.
+- **Removable Media**: One-click mount and unmount of USB drives and partitions via UDisks2 and DBus.
+- **Async File Transfers**: Non-blocking background copy, move, and trash operations with real-time transfer speed and ETA.
+- **Git Badges**: Instant status indicators on modified, staged, and untracked files within repositories.
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+Bubble is designed for efficient keyboard-first navigation:
+
+### Navigation & Views
 | Shortcut | Action |
-|----------|--------|
-| `Return` / `Double-click` | Open file or directory |
-| `Backspace` / `Alt+Up` | Parent directory |
-| `Alt+Left` / `Alt+Right` | Back / Forward in history |
-| `Alt+Home` | Home directory |
-| `Ctrl+L` | Focus path bar |
-| `Ctrl+F` | Search |
-| `F5` | Refresh |
-| `Ctrl+Return` | Open in a new tab |
-| `Ctrl+Shift+Return` | Open in the split pane |
-| `Type any letter` | Type-ahead jump to file |
+|---|---|
+| `Enter` / Double Click | Open file or directory |
+| `Backspace` / `Alt+Up` | Go to parent directory |
+| `Alt+Left` / `Alt+Right` | History Back / Forward |
+| `Ctrl+L` | Focus address / path bar (inline edit) |
+| `Ctrl+F` | Instant search filter |
+| `Ctrl+1` / `Ctrl+2` / `Ctrl+3` | Switch to Grid / Miller Columns / Detailed View |
+| `Space` | Quick Preview overlay (Images, Video, Code, PDF) |
+| `F3` | Toggle Dual-Pane Split view |
+| `F9` | Toggle Sidebar |
+| `Ctrl+H` | Toggle hidden files (`.dotfiles`) |
+| `Ctrl+Shift+B` | Toggle background transparency / blur |
 
-### Views
-
+### Tabs & Windows
 | Shortcut | Action |
-|----------|--------|
-| `Ctrl+1` | Grid view |
-| `Ctrl+2` | Miller column view |
-| `Ctrl+3` | Detailed view |
-| `Ctrl+Scroll` | Zoom (icon size or row height); also Settings → Layout → Icon Size |
-| `Space` | Quick preview |
-| `F3` | Toggle split pane |
-| `F9` | Toggle sidebar |
-| `Ctrl+H` | Toggle hidden files |
-| `Ctrl+Shift+B` | Toggle transparency |
-| `F6` / `Shift+F6` | Focus next / previous pane |
-| `Ctrl+Alt+Left` / `Ctrl+Alt+Right` | Focus left / right pane |
-| `Ctrl+,` | Settings |
-| `Ctrl+Shift+,` | Open `config.toml` in your editor |
-| `Ctrl+?` | Keyboard shortcut reference |
+|---|---|
+| `Ctrl+T` | Open new tab |
+| `Ctrl+W` | Close current tab |
+| `Ctrl+Shift+T` | Reopen last closed tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle next / previous tab |
+| `Alt+1` – `Alt+9` | Jump directly to tab 1–9 |
+| `Ctrl+Alt+N` | Open new independent window |
 
-### Tabs & windows
-
+### File Operations & Security
 | Shortcut | Action |
-|----------|--------|
-| `Ctrl+T` | New tab |
-| `Ctrl+W` | Close tab |
-| `Ctrl+Shift+T` | Reopen closed tab |
-| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
-| `Ctrl+PgDown` / `Ctrl+PgUp` | Next / previous tab |
-| `Alt+1` … `Alt+8` | Jump to tab 1-8 |
-| `Alt+9` | Jump to the last tab |
-| `Ctrl+Alt+N` | New window |
-
-Launching `bubble` while it is already running opens another independent
-window. The one exception is `bubble <path>`, which forwards the path to the
-running window as a new tab, so desktop launchers and `xdg-open` keep behaving
-as expected. Pass `--new-window` (or `-n`) to get a separate window for a path
-too.
-
-Only the first window keeps the saved session (tabs + window geometry);
-additional windows start fresh and leave it untouched.
-
-Run `bubble --help` for the full list of flags and environment variables.
-
-### File operations
-
-| Shortcut | Action |
-|----------|--------|
+|---|---|
+| `Ctrl+Shift+L` | **Lock / Unlock file or folder in Vault** |
+| `F2` | Inline file rename |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / Cut / Paste |
-| `Ctrl+A` | Select all |
-| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo |
-| `F2` | Rename |
-| `Delete` | Move to trash |
-| `Shift+Delete` | Permanent delete |
-| `Ctrl+Shift+N` | New folder |
-| `Ctrl+N` | New file |
-| `Alt+Return` | Properties |
-| `Ctrl+Alt+T` | Open terminal here |
-| `Ctrl+Shift+L` | Lock / Unlock file or folder (Vault) |
-| `Shift+F10` | Context menu |
-
-Shortcuts can be remapped in `~/.config/bubble/config.toml` under the `[shortcuts]` section (see the generated `config.toml.sample` for the full key list). Fixed: `Backspace`, `Alt+1`…`Alt+9`, `Ctrl+PgUp`/`Ctrl+PgDown`, `Ctrl+Scroll`, `Escape`, `Menu`.
+| `Delete` | Send to Trash |
+| `Shift+Delete` | Permanently delete |
+| `Ctrl+Shift+N` | Create new directory |
+| `Ctrl+N` | Create new empty file |
+| `Ctrl+Alt+T` | Open terminal at current directory |
 
 ---
 
-## Configuration
+## 🎨 Theming & Customization
 
-Config lives at `~/.config/bubble/config.toml`. On first run Bubble writes it fully commented; changing settings inside the app rewrites the file without comments, so `~/.config/bubble/config.toml.sample` (regenerated on every start) is the always-documented reference.
+Bubble features a modular TOML-based theme engine with hot-reloading on save.
 
-```toml
-[general]
-# theme = "catppuccin-mocha"   # active theme; filename in themes/ without .toml
-light_theme = "catppuccin-latte"  # the Dark Mode switch in Settings flips
-dark_theme = "catppuccin-mocha"   # between these two
-icon_theme = "Adwaita"         # system icon theme fallback
-font_family = ""               # UI font; empty = desktop font
-default_view = "grid"          # grid | detailed | miller
-show_hidden = false
-dependency_startup_check = true # warn on startup when a required tool is missing
-sort_by = "name"               # name | size | modified | type
-sort_ascending = true
-remember_sort_per_folder = true
-
-[sidebar]
-position = "left"
-width = 200
-visible = true
-# Quick-access entries to hide. Valid names:
-# "Home", "Recents", "Trash", "Network", "Pictures", "Downloads"
-hidden_quick_access = []
-
-[appearance]
-radius_small = 4
-radius_medium = 8
-radius_large = 12
-transparency_enabled = true    # needs compositor blur rules to look good
-transparency_level = 1.0       # 0.0 transparent .. 1.0 opaque
-animations_enabled = true
-anim_duration_fast = 100       # ms
-anim_duration = 200
-anim_duration_slow = 350
-anim_curve_enter = "OutCubic"  # Qt easing name, or "Bezier"
-anim_curve_exit = "InCubic"
-anim_curve_transition = "Bezier"
-
-[window]
-# show_controls = false        # unset = only when the compositor draws no decorations
-button_layout = ":minimize,maximize,close"   # ":" splits left from right side
-
-[list_view]
-# Columns in the detailed view, in display order ("name" is always first).
-# Right-click the header to toggle columns, drag headers to reorder, drag a
-# header's right edge to resize. Available: size, modified, type, permissions,
-# owner, group, created, accessed, extension, mime, git, symlink
-columns = ["name", "size", "modified", "type"]
-column_widths = { size = 110, modified = 140, type = 80 }
-
-[miller_view]
-# Column widths as fractions of the view; the preview column takes the rest.
-# Drag the lines between columns to change them (each keeps at least 12%).
-parent_fraction = 0.2
-current_fraction = 0.5
-
-[bookmarks]
-# paths = ["~/Documents", "~/Downloads", "~/Pictures", "~/Projects"]   # unset = XDG user folders
-names = { "~/Projects" = "Work" }   # optional display names (right-click → Rename)
-
-[[context_menu.actions]]          # extra right-click entries; %f = path, runs per item
-name = "Optimize PNG"
-command = "oxipng -o 4 %f"
-types = ["png"]                     # "*", "dir", extension, or MIME ("image/*")
-
-[shortcuts]
-# Override any shortcut. Examples:
-# rename       = "F2"
-# new_tab      = "Ctrl+T"
-# miller_view  = "Ctrl+2"
+```
+~/.config/bubble/
+├── config.toml           # User preferences and keybindings
+└── themes/               # Custom user themes (*.toml)
 ```
 
----
+### Bundled Themes
+- **Catppuccin**: Mocha (dark) & Latte (light)
+- **Rose Pine**: Main (dark), Moon (dim), & Dawn (light)
 
-## Theming
-
-Themes are plain TOML files. Nothing is hardcoded in the binary. Five themes
-ship in `/usr/share/bubble/themes/*.toml` — `catppuccin-mocha`,
-`catppuccin-latte`, `rose-pine`, `rose-pine-moon` and `rose-pine-dawn`. Copy one
-as a starting point:
-
-```sh
-cp /usr/share/bubble/themes/catppuccin-mocha.toml ~/.config/bubble/themes/mytheme.toml
-```
-
-`~/.config/bubble/themes/` is created on first run and searched first, so a file
-there shadows a bundled theme of the same name. Every `*.toml` in either
-directory appears in the theme picker. Select it there, or set it in config:
-
-```toml
-[general]
-theme = "mytheme"
-```
-
-A theme is just a colour table, and any key you omit falls back to the default:
+### Custom Colors
+Create your own theme file in `~/.config/bubble/themes/my-theme.toml`:
 
 ```toml
 [colors]
 base    = "#1e1e2e"
 mantle  = "#181825"
-crust   = "#11111b"
 surface = "#313244"
-overlay = "#45475a"
 text    = "#cdd6f4"
-subtext = "#bac2de"
-muted   = "#6c7086"
 accent  = "#89b4fa"
 success = "#a6e3a1"
 warning = "#f9e2af"
 error   = "#f38ba8"
 ```
 
-`~/.config/bubble/themes/example.toml.sample` is rewritten on every start with
-the same table plus a comment per colour, so the directory documents itself.
-
-Themes reload live on save.
-
-### Light and dark
-
-Name two themes as a pair and the Dark Mode switch in Settings flips between
-them:
-
-```toml
-[general]
-light_theme = "rose-pine-dawn"
-dark_theme = "rose-pine"
-```
-
-Both are dropdowns under Settings, so you can set them there instead. `theme`
-is whichever one is currently in effect.
-
-Bubble does not watch your desktop for light/dark changes. If you want it to
-follow a system-wide toggle, have that toggle rewrite `theme` in
-`config.toml`: the file is watched and the new theme applies immediately, with
-no restart and no need for Bubble to be running at the time.
-
-```sh
-sed -i 's/^theme = .*/theme = "rose-pine-dawn"/' ~/.config/bubble/config.toml
-```
-
-The only time the desktop is consulted is the very first launch, when there is
-no `theme` yet: Bubble asks the XDG desktop portal whether you prefer light or
-dark so the initial theme matches rather than always starting dark.
+Switch themes inside the app via **Settings (`Ctrl+,`)** or set `theme = "my-theme"` in `~/.config/bubble/config.toml`. Changes apply immediately without restarting.
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
-Bubble is a three-layer Qt6 application:
+Bubble is architected into three distinct layers:
 
-- **QML frontend** (`src/qml/`): all rendering. `Main.qml` wires tab state, selection, and shortcuts. Views (`FileGridView`, `FileDetailedView`, `FileMillerView`) are switched by `FileViewContainer`. The [Quill](https://github.com/soyeb-jim285/quill) component library provides themed Buttons, TextFields, Cards, etc.
-- **C++ backend** (`src/models/`, `src/services/`, `src/providers/`): `QAbstractListModel` subclasses for files, tabs, bookmarks, devices. Async services for clipboard, file operations, search, disk usage, previews. Exposed to QML via `setContextProperty`.
-- **System layer**: GIO (`GioTransferWorker`) for transfers, UDisks2 over DBus for devices, `wl-copy` for clipboard.
-
----
-
-## Contributing
-
-Issues and PRs welcome! A few notes:
-
-- Tests are off in the build recipe above; configure with `-DBUILD_TESTS=ON` and run `ctest --test-dir build`
-- Pull requests are built and tested automatically by the `Build` workflow
-- Match the existing code style (4-space indent for QML and C++)
-- The project uses Git submodules, so run `git submodule update --init --recursive` after pulling
-- AppImage builds are produced automatically on `v*` tags by the GitHub Actions workflow
+1. **Frontend (QML / QtQuick)**: Modern declarative UI with custom Lucide SVG vector iconography and fluid animations.
+2. **Backend (C++20 & Qt6)**: High-performance `QAbstractItemModel` engines, multithreaded directory watchers, and background worker threads.
+3. **Core Services**:
+   - `CryptoEngine` & `VaultService`: AES-256-GCM authenticated encryption and session auto-locking.
+   - `GioTransferWorker`: Asynchronous non-blocking file streaming via GIO.
+   - `ThumbnailProvider`: Off-thread caching thumbnail generators for media and documents.
 
 ---
 
-## License
+## 🤝 Contributing
 
-[MIT](LICENSE) © Soyeb Pervez Jim
+Contributions, bug reports, and suggestions are welcome!
 
-Built with [Qt 6](https://www.qt.io/) · Icons from [Lucide](https://lucide.dev/) · Inspired by macOS Finder, Nautilus, and Dolphin.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE) © Soyeb Pervez Jim.

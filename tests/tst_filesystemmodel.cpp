@@ -1039,7 +1039,7 @@ private slots:
         model.setSynchronousReload(true);
         auto roles = model.roleNames();
 
-        QCOMPARE(roles.count(), 23);
+        QCOMPARE(roles.count(), 25);
         QCOMPARE(roles[FileSystemModel::HasPdfPreviewRole],    QByteArray("hasPdfPreview"));
         QCOMPARE(roles[FileSystemModel::FileNameRole],         QByteArray("fileName"));
         QCOMPARE(roles[FileSystemModel::FilePathRole],         QByteArray("filePath"));
@@ -1063,6 +1063,8 @@ private slots:
         QCOMPARE(roles[FileSystemModel::FileExtensionRole],    QByteArray("fileExtension"));
         QCOMPARE(roles[FileSystemModel::MimeTypeRole],         QByteArray("mimeType"));
         QCOMPARE(roles[FileSystemModel::SymlinkTargetRole],    QByteArray("symlinkTarget"));
+        QCOMPARE(roles[FileSystemModel::IsLockedRole],         QByteArray("isLocked"));
+        QCOMPARE(roles[FileSystemModel::IsSessionUnlockedRole], QByteArray("isSessionUnlocked"));
     }
 
     // 16. QAbstractItemModelTester

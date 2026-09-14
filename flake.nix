@@ -188,7 +188,6 @@
       packages = forEachSystem (system: {
         default = self.packages.${system}.bubble;
         bubble = mkBubble (pkgsFor system);
-        hyprfm = self.packages.${system}.bubble;
       });
 
       apps = forEachSystem (system: {

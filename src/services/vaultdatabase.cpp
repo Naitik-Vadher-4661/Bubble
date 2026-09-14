@@ -163,7 +163,8 @@ bool VaultDatabase::updateEntry(const VaultEntry &entry)
     if (!db.isOpen()) return false;
 
     QSqlQuery query(db);
-    query.prepare("UPDATE locked_items SET pw_hash = ?, pw_salt = ?, enc_key = ?, enc_iv = ?, enc_salt = ? WHERE path = ?");
+    query.prepare("UPDATE locked_items SET parent_id = ?, pw_hash = ?, pw_salt = ?, enc_key = ?, enc_iv = ?, enc_salt = ? WHERE path = ?");
+    query.addBindValue(entry.parentId);
     query.addBindValue(entry.pwHash);
     query.addBindValue(entry.pwSalt);
     query.addBindValue(entry.encKey);

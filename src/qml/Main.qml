@@ -45,6 +45,8 @@ ApplicationWindow {
     // Archive being unlocked right now; {path, dest}. dest is empty when the
     // password only feeds the preview (QuickPreview refresh).
     property var passwordDialogContext: null
+    property var pendingVaultAction: null
+    property var pendingContextMenu: null
     readonly property string unifiedTrashPath: "trash:///"
     readonly property bool isTrashView: fileOps.isTrashPath(panePath(activePane))
     readonly property bool isRemoteView: fileOps.isRemotePath(panePath(activePane))
@@ -566,6 +568,11 @@ ApplicationWindow {
         if (!tabModel.activeTab || !path)
             return
 
+        if (typeof vault !== "undefined" && vault && vault.isLocked(path) && !vault.isSessionUnlocked(path)) {
+            lockPasswordDialog.openForUnlock(path, true)
+            return
+        }
+
         ensureMountedAndRun(path, function() {
             root.setPaneRecents(pane, false)
             root.clearPaneSearch(pane)
@@ -584,6 +591,11 @@ ApplicationWindow {
     function openPathInNewTab(path) {
         if (!path)
             return
+
+        if (typeof vault !== "undefined" && vault && vault.isLocked(path) && !vault.isSessionUnlocked(path)) {
+            lockPasswordDialog.openForUnlock(path, true)
+            return
+        }
 
         ensureMountedAndRun(path, function() {
             root.setPaneRecents(root.activePane, false)
@@ -1278,8 +1290,61 @@ ApplicationWindow {
         onUnlocked: (path) => {
             fsModel.refresh()
             splitFsModel.refresh()
+
+            // 1. Check if this unlock was triggered for a right-click context menu
+            if (root.pendingContextMenu && root.pendingContextMenu.filePath === path) {
+                var menuCtx = root.pendingContextMenu
+                root.pendingContextMenu = null
+                root.showContextMenuForPane(menuCtx.pane, menuCtx.filePath, menuCtx.isDirectory, menuCtx.position)
+                return
+            }
+
+            // 2. Check if this unlock was triggered for Copy, Cut, or Paste
+            if (root.pendingVaultAction) {
+                var action = root.pendingVaultAction
+                if (action.type === "paste") {
+                    var pDest = action.destPath
+                    root.pendingVaultAction = null
+                    root.pasteIntoDirectory(pDest)
+                    return
+                }
+
+                var nextLocked = root.firstLockedPath(action.paths)
+                if (nextLocked !== "") {
+                    var nextProps = fsModel.fileProperties(nextLocked)
+                    var isDirProp = nextProps ? !!nextProps["isDir"] : false
+                    lockPasswordDialog.openForUnlock(nextLocked, isDirProp, true)
+                    return
+                }
+                root.pendingVaultAction = null
+                if (action.type === "copy") {
+                    clipboard.copy(action.paths)
+                    toast.show(action.paths.length > 1 ? "Items unlocked and copied to clipboard" : "Item unlocked and copied to clipboard", "info")
+                } else if (action.type === "cut") {
+                    clipboard.cut(action.paths)
+                    toast.show(action.paths.length > 1 ? "Items unlocked and cut to clipboard" : "Item unlocked and cut to clipboard", "info")
+                } else if (action.type === "trash") {
+                    root.requestTrash(action.paths)
+                } else if (action.type === "delete") {
+                    root.requestDelete(action.paths)
+                } else if (action.type === "openFileWith") {
+                    if (typeof vault !== "undefined" && vault) {
+                        vault.sessionOpenFileWith(action.path, action.desktopFile)
+                    } else {
+                        fileOps.openFileWith(action.path, action.desktopFile)
+                    }
+                }
+                return
+            }
+
+            // 3. Default activation (Double click or Enter)
+            var isDir = lockPasswordDialog.isDir
             var info = fsModel.fileProperties(path)
-            if (info && info["isDir"]) {
+            if (info && info["isDir"] !== undefined) {
+                isDir = !!info["isDir"]
+            }
+
+            if (isDir) {
                 root.navigateActivePaneTo(path)
             } else if (lockPasswordDialog.isPermanent) {
                 fileOps.openFile(path)
@@ -1287,6 +1352,10 @@ ApplicationWindow {
             } else {
                 toast.show("Secure session active (re-locks when file is closed)", "info")
             }
+        }
+        onRejected: {
+            root.pendingContextMenu = null
+            root.pendingVaultAction = null
         }
         onLocked: (path) => {
             fsModel.refresh()
@@ -1965,7 +2034,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
-                                    fileOps.openFileWith(appChooserDialog.filePath, modelData.desktopFile)
+                                    root.requestOpenFileWith(appChooserDialog.filePath, modelData.desktopFile)
                                     appChooserDialog.close()
                                 }
                             }
@@ -2789,13 +2858,10 @@ ApplicationWindow {
         currentSortAscending: tabModel.activeTab ? tabModel.activeTab.sortAscending : true
 
         onOpenRequested: (path, isDir) => {
-            if (isDir)
-                root.navigateActivePaneTo(path)
-            else
-                fileOps.openFile(path)
+            root.handlePaneFileActivated(root.activePane, path, isDir)
         }
         onOpenInNewTabRequested: (path) => root.openPathInNewTab(path)
-        onOpenWithRequested: (path, desktopFile) => fileOps.openFileWith(path, desktopFile)
+        onOpenWithRequested: (path, desktopFile) => root.requestOpenFileWith(path, desktopFile)
         onSetDefaultAppRequested: (mimeType, desktopFile) => {
             root.paneBaseModel(root.activePane).setDefaultApp(mimeType, desktopFile)
         }
@@ -2805,15 +2871,8 @@ ApplicationWindow {
             appChooserDialog.open()
         }
 
-        onCutRequested: (paths) => {
-            if (root.anyPathLocked(paths)) {
-                toast.show("Cannot move locked files. Unlock them first.", "warning")
-                return
-            }
-            clipboard.cut(paths)
-        }
-
-        onCopyRequested: (paths) => clipboard.copy(paths)
+        onCutRequested: (paths) => root.requestCut(paths)
+        onCopyRequested: (paths) => root.requestCopy(paths)
 
         onPasteRequested: (destPath) => {
             root.pasteIntoDirectory(destPath)
@@ -2836,35 +2895,11 @@ ApplicationWindow {
             root.openBulkRenameDialog(paths)
         }
 
-        onTrashRequested: (paths) => {
-            if (root.anyPathLocked(paths)) {
-                toast.show("Cannot trash locked files. Unlock them first.", "warning")
-                return
-            }
-            var hasRemotePath = false
-            for (var i = 0; i < paths.length; ++i) {
-                if (fileOps.isRemotePath(paths[i])) {
-                    hasRemotePath = true
-                    break
-                }
-            }
-
-            if (hasRemotePath)
-                fileOps.trashFiles(paths)
-            else
-                undoManager.trashFiles(paths)
-        }
+        onTrashRequested: (paths) => root.requestTrash(paths)
         onRestoreRequested: (paths) => fileOps.restoreFromTrash(paths)
         onEmptyTrashRequested: emptyTrashConfirmDialog.open()
 
-        onDeleteRequested: (paths) => {
-            if (root.anyPathLocked(paths)) {
-                toast.show("Cannot delete locked files. Unlock them first.", "warning")
-                return
-            }
-            deleteConfirmPaths = paths
-            deleteConfirmDialog.open()
-        }
+        onDeleteRequested: (paths) => root.requestDelete(paths)
 
         onLockRequested: (paths, isDir) => {
             lockPasswordDialog.openForLock(paths, isDir)
@@ -3176,7 +3211,7 @@ ApplicationWindow {
         sequence: config.shortcutMap["copy"]
         onActivated: {
             var paths = getSelectedPaths()
-            if (paths.length > 0) clipboard.copy(paths)
+            if (paths.length > 0) root.requestCopy(paths)
         }
     }
 
@@ -3184,7 +3219,7 @@ ApplicationWindow {
         sequence: config.shortcutMap["cut"]
         onActivated: {
             var paths = getSelectedPaths()
-            if (paths.length > 0) clipboard.cut(paths)
+            if (paths.length > 0) root.requestCut(paths)
         }
     }
 
@@ -3203,24 +3238,7 @@ ApplicationWindow {
         sequence: config.shortcutMap["trash"]
         onActivated: {
             var paths = getSelectedPaths()
-            if (paths.length === 0) return
-            if (root.isTrashView) {
-                deleteConfirmPaths = paths
-                deleteConfirmDialog.open()
-            } else {
-                var hasRemotePath = false
-                for (var i = 0; i < paths.length; ++i) {
-                    if (fileOps.isRemotePath(paths[i])) {
-                        hasRemotePath = true
-                        break
-                    }
-                }
-
-                if (hasRemotePath)
-                    fileOps.trashFiles(paths)
-                else
-                    undoManager.trashFiles(paths)
-            }
+            if (paths.length > 0) root.requestTrash(paths)
         }
     }
 
@@ -3340,6 +3358,12 @@ ApplicationWindow {
             }
             var paths = getSelectedPaths()
             if (paths.length === 0) return
+            if (typeof vault !== "undefined" && vault && vault.isLocked(paths[0]) && !vault.isSessionUnlocked(paths[0])) {
+                var props = fsModel.fileProperties(paths[0])
+                var isDir = props ? !!props["isDir"] : false
+                lockPasswordDialog.openForUnlock(paths[0], isDir, true)
+                return
+            }
             quickPreview.fileModel = root.paneBaseModel(activePane)
             quickPreview.filePath = paths[0]
             quickPreview.directoryFiles = getDirectoryFiles()
@@ -3479,6 +3503,106 @@ ApplicationWindow {
         return false
     }
 
+    function firstLockedPath(paths) {
+        if (!paths || typeof vault === "undefined" || !vault)
+            return ""
+        for (var i = 0; i < paths.length; ++i) {
+            if (vault.isLocked(paths[i]) && !vault.isSessionUnlocked(paths[i]))
+                return paths[i]
+        }
+        return ""
+    }
+
+    function requestCopy(paths) {
+        if (!paths || paths.length === 0) return
+        var locked = root.firstLockedPath(paths)
+        if (locked !== "") {
+            root.pendingVaultAction = { type: "copy", paths: paths }
+            var props = fsModel.fileProperties(locked)
+            var isDir = props ? !!props["isDir"] : false
+            lockPasswordDialog.openForUnlock(locked, isDir, true)
+            return
+        }
+        clipboard.copy(paths)
+    }
+
+    function requestCut(paths) {
+        if (!paths || paths.length === 0) return
+        var locked = root.firstLockedPath(paths)
+        if (locked !== "") {
+            root.pendingVaultAction = { type: "cut", paths: paths }
+            var props = fsModel.fileProperties(locked)
+            var isDir = props ? !!props["isDir"] : false
+            lockPasswordDialog.openForUnlock(locked, isDir, true)
+            return
+        }
+        clipboard.cut(paths)
+    }
+
+    function requestTrash(paths) {
+        if (!paths || paths.length === 0) return
+        var locked = root.firstLockedPath(paths)
+        if (locked !== "") {
+            root.pendingVaultAction = { type: "trash", paths: paths }
+            var props = fsModel.fileProperties(locked)
+            var isDir = props ? !!props["isDir"] : false
+            lockPasswordDialog.openForUnlock(locked, isDir, true)
+            return
+        }
+
+        if (root.isTrashView) {
+            deleteConfirmPaths = paths
+            deleteConfirmDialog.open()
+        } else {
+            var hasRemotePath = false
+            for (var i = 0; i < paths.length; ++i) {
+                if (fileOps.isRemotePath(paths[i])) {
+                    hasRemotePath = true
+                    break
+                }
+            }
+
+            if (hasRemotePath)
+                fileOps.trashFiles(paths)
+            else
+                undoManager.trashFiles(paths)
+        }
+    }
+
+    function requestDelete(paths) {
+        if (!paths || paths.length === 0) return
+        var locked = root.firstLockedPath(paths)
+        if (locked !== "") {
+            root.pendingVaultAction = { type: "delete", paths: paths }
+            var props = fsModel.fileProperties(locked)
+            var isDir = props ? !!props["isDir"] : false
+            lockPasswordDialog.openForUnlock(locked, isDir, true)
+            return
+        }
+        deleteConfirmPaths = paths
+        deleteConfirmDialog.open()
+    }
+
+    function requestOpenFileWith(path, desktopFile) {
+        if (typeof vault !== "undefined" && vault && vault.isLocked(path)) {
+            if (!vault.isSessionUnlocked(path)) {
+                root.pendingVaultAction = {
+                    type: "openFileWith",
+                    path: path,
+                    desktopFile: desktopFile
+                }
+                var props = fsModel.fileProperties(path)
+                var isDir = props ? !!props["isDir"] : false
+                lockPasswordDialog.openForUnlock(path, isDir, true)
+                return
+            } else {
+                vault.sessionOpenFileWith(path, desktopFile)
+                return
+            }
+        }
+        fileOps.openFileWith(path, desktopFile)
+    }
+
     function handlePaneFileActivated(pane, filePath, isDirectory) {
         root.setActivePane(pane)
 
@@ -3560,6 +3684,17 @@ ApplicationWindow {
     function showContextMenuForPane(pane, filePath, isDirectory, position) {
         root.setActivePane(pane)
 
+        if (filePath !== "" && typeof vault !== "undefined" && vault && vault.isLocked(filePath) && !vault.isSessionUnlocked(filePath)) {
+            root.pendingContextMenu = {
+                pane: pane,
+                filePath: filePath,
+                isDirectory: isDirectory,
+                position: position
+            }
+            lockPasswordDialog.openForUnlock(filePath, isDirectory, true)
+            return
+        }
+
         var currentDir = panePath(pane)
         contextMenu.targetPath = filePath !== "" ? filePath : currentDir
         contextMenu.targetIsDir = filePath !== "" ? isDirectory : true
@@ -3590,6 +3725,12 @@ ApplicationWindow {
     function pasteIntoDirectory(destPath) {
         if (!destPath)
             return
+
+        if (typeof vault !== "undefined" && vault && vault.isLocked(destPath) && !vault.isSessionUnlocked(destPath)) {
+            root.pendingVaultAction = { type: "paste", destPath: destPath }
+            lockPasswordDialog.openForUnlock(destPath, true, true)
+            return
+        }
 
         if (clipboard.hasContent) {
             var wasCut = clipboard.isCut
@@ -4036,12 +4177,7 @@ ApplicationWindow {
         anchors.fill: parent
         z: 100
         onOpenRequested: (path, isDirectory) => {
-            if (isDirectory) {
-                root.navigateActivePaneTo(path)
-            } else {
-                fileOps.openFile(path)
-                recentFiles.addRecent(path)
-            }
+            root.handlePaneFileActivated(root.activePane, path, isDirectory)
         }
         onUnlockArchiveRequested: (path, retry) => {
             root.askArchivePassword(path, "", retry)

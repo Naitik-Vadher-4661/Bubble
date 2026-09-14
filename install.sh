@@ -20,14 +20,18 @@ else
     SCRIPT_DIR="$(pwd)"
 fi
 
-if [[ ! -f "$SCRIPT_DIR/CMakeLists.txt" || ! -d "$SCRIPT_DIR/src" ]]; then
-    TMP_CLONE_DIR="$(mktemp -d /tmp/bubble-install-XXXXXX)"
-    echo "==> Fetching Bubble source repository to $TMP_CLONE_DIR..."
-    git clone --depth 1 --recursive https://github.com/TattvaOrg/Bubble.git "$TMP_CLONE_DIR"
-    SCRIPT_DIR="$TMP_CLONE_DIR"
-    CLEANUP_TMP=1
-fi
 cd "$SCRIPT_DIR"
+
+ensure_source_tree() {
+    if [[ ! -f "$SCRIPT_DIR/CMakeLists.txt" || ! -d "$SCRIPT_DIR/src" ]]; then
+        TMP_CLONE_DIR="$(mktemp -d /tmp/bubble-install-XXXXXX)"
+        echo "==> Fetching Bubble source repository (${BUBBLE_REPO}) to $TMP_CLONE_DIR..."
+        git clone --depth 1 --recursive "https://github.com/${BUBBLE_REPO}.git" "$TMP_CLONE_DIR"
+        SCRIPT_DIR="$TMP_CLONE_DIR"
+        CLEANUP_TMP=1
+        cd "$SCRIPT_DIR"
+    fi
+}
 
 # Defaults
 MODE="user"
@@ -38,6 +42,9 @@ CHECK_DEPS=1
 AUTO_YES=0
 UNINSTALL=0
 FORCE_REBUILD=0
+INSTALL_METHOD="binary"
+BUBBLE_REPO="${BUBBLE_REPO:-TattvaOrg/Bubble}"
+TARGET_TAG=""
 
 print_usage() {
     cat <<USAGE
@@ -47,6 +54,10 @@ Usage:
   ./install.sh [options]
 
 Options:
+  --binary            Install prebuilt binary (AppImage) [default]
+  --source, --build   Build and install from source using CMake
+  --repo <owner/repo> GitHub repository to download from (default: TattvaOrg/Bubble)
+  --tag <tag>         Specific release tag to install (e.g. continuous, v0.6.1)
   --user              Install for current user only (~/.local) [default]
   --system            Install system-wide (/usr/local, requires sudo)
   --prefix <path>     Install to custom prefix path
@@ -59,7 +70,8 @@ Options:
   -h, --help          Show this help message
 
 Examples:
-  ./install.sh                    # Recommended: Installs to ~/.local
+  ./install.sh                    # Recommended: Installs prebuilt binary to ~/.local
+  ./install.sh --source           # Build and install from source
   sudo ./install.sh --system      # Installs to /usr/local
   ./install.sh --uninstall        # Removes from ~/.local
 USAGE
@@ -67,6 +79,30 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --binary)
+            INSTALL_METHOD="binary"
+            shift
+            ;;
+        --source|--build)
+            INSTALL_METHOD="source"
+            shift
+            ;;
+        --repo)
+            if [[ -z "${2:-}" ]]; then
+                echo "Error: --repo requires an owner/repo argument." >&2
+                exit 1
+            fi
+            BUBBLE_REPO="$2"
+            shift 2
+            ;;
+        --tag)
+            if [[ -z "${2:-}" ]]; then
+                echo "Error: --tag requires a version tag argument." >&2
+                exit 1
+            fi
+            TARGET_TAG="$2"
+            shift 2
+            ;;
         --user)
             MODE="user"
             shift
@@ -95,7 +131,7 @@ while [[ $# -gt 0 ]]; do
             BUILD_TYPE="Debug"
             shift
             ;;
-        --rebuild)
+        -f|--force|--rebuild)
             FORCE_REBUILD=1
             shift
             ;;
@@ -134,6 +170,17 @@ fi
 
 # Handle uninstall
 if [[ $UNINSTALL -eq 1 ]]; then
+    if [[ -f "$SCRIPT_DIR/uninstall.sh" ]]; then
+        UNINSTALL_ARGS=()
+        if [[ -n "$CUSTOM_PREFIX" ]]; then
+            UNINSTALL_ARGS+=(--prefix "$CUSTOM_PREFIX")
+        fi
+        if [[ $AUTO_YES -eq 1 ]]; then
+            UNINSTALL_ARGS+=(-y)
+        fi
+        exec bash "$SCRIPT_DIR/uninstall.sh" "${UNINSTALL_ARGS[@]}"
+    fi
+
     echo "==> Uninstalling Bubble from prefix: $PREFIX"
 
     # Securely shred and destroy all locked vault files before removal
@@ -195,6 +242,216 @@ if [[ "$MODE" == "system" || "$PREFIX" == /usr* || "$PREFIX" == /opt* ]]; then
         exit 1
     fi
 fi
+
+# ==============================================================================
+# Prebuilt Binary Installation (AppImage)
+# ==============================================================================
+install_prebuilt_binary() {
+    local arch
+    arch="$(uname -m)"
+    if [[ "$arch" != "x86_64" ]]; then
+        echo "==> Prebuilt binary is only available for x86_64 (detected: $arch)."
+        return 1
+    fi
+
+    local repos_to_check=()
+    if [[ -n "${BUBBLE_REPO:-}" ]]; then
+        repos_to_check+=("$BUBBLE_REPO")
+    fi
+    local origin_repo=""
+    if command -v git >/dev/null 2>&1; then
+        origin_repo="$(git remote get-url origin 2>/dev/null | sed -E 's#^.*github\.com[:/]([^/]+/[^/.]+)(\.git)?$#\1#' || true)"
+    fi
+    if [[ -n "$origin_repo" && "$origin_repo" != "${BUBBLE_REPO:-}" ]]; then
+        repos_to_check+=("$origin_repo")
+    fi
+    for fallback in "TattvaOrg/Bubble"; do
+        if [[ ! " ${repos_to_check[*]} " =~ " ${fallback} " ]]; then
+            repos_to_check+=("$fallback")
+        fi
+    done
+
+    local tmp_appimage
+    tmp_appimage="$(mktemp /tmp/bubble-bin-XXXXXX.AppImage)"
+    local success=0
+    local download_url=""
+    local matched_repo=""
+
+    for repo in "${repos_to_check[@]}"; do
+        echo "==> Searching for prebuilt Bubble AppImage on ${repo}..."
+        local candidate_urls=()
+        if [[ -n "$TARGET_TAG" ]]; then
+            candidate_urls+=(
+                "https://github.com/${repo}/releases/download/${TARGET_TAG}/Bubble-${TARGET_TAG}-x86_64.AppImage"
+                "https://github.com/${repo}/releases/download/${TARGET_TAG}/Bubble-x86_64.AppImage"
+            )
+        else
+            candidate_urls+=(
+                "https://github.com/${repo}/releases/latest/download/Bubble-x86_64.AppImage"
+                "https://github.com/${repo}/releases/download/continuous/Bubble-continuous-x86_64.AppImage"
+                "https://github.com/${repo}/releases/download/continuous/Bubble-x86_64.AppImage"
+            )
+        fi
+
+        for url in "${candidate_urls[@]}"; do
+            echo "--> Checking $url..."
+            if command -v curl >/dev/null 2>&1; then
+                if curl -f -sSL -L "$url" -o "$tmp_appimage" 2>/dev/null; then
+                    if [[ -s "$tmp_appimage" ]] && head -c 4 "$tmp_appimage" | grep -q "ELF"; then
+                        download_url="$url"
+                        matched_repo="$repo"
+                        success=1
+                        break 2
+                    fi
+                fi
+            elif command -v wget >/dev/null 2>&1; then
+                if wget -q -O "$tmp_appimage" "$url" 2>/dev/null; then
+                    if [[ -s "$tmp_appimage" ]] && head -c 4 "$tmp_appimage" | grep -q "ELF"; then
+                        download_url="$url"
+                        matched_repo="$repo"
+                        success=1
+                        break 2
+                    fi
+                fi
+            fi
+        done
+
+        local api_url="https://api.github.com/repos/${repo}/releases"
+        local found_url=""
+        if command -v curl >/dev/null 2>&1; then
+            found_url=$(curl -sSL -H "Accept: application/vnd.github.v3+json" "$api_url" 2>/dev/null \
+                | grep -E -o 'https://github.com/[^"]*Bubble[^"]*\.AppImage' | head -n 1 || true)
+        elif command -v wget >/dev/null 2>&1; then
+            found_url=$(wget -qO- "$api_url" 2>/dev/null \
+                | grep -E -o 'https://github.com/[^"]*Bubble[^"]*\.AppImage' | head -n 1 || true)
+        fi
+
+        if [[ -n "$found_url" ]]; then
+            echo "--> Found release asset: $found_url"
+            if command -v curl >/dev/null 2>&1 && curl -f -sSL -L "$found_url" -o "$tmp_appimage" 2>/dev/null; then
+                if [[ -s "$tmp_appimage" ]] && head -c 4 "$tmp_appimage" | grep -q "ELF"; then
+                    download_url="$found_url"
+                    matched_repo="$repo"
+                    success=1
+                    break
+                fi
+            elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp_appimage" "$found_url" 2>/dev/null; then
+                if [[ -s "$tmp_appimage" ]] && head -c 4 "$tmp_appimage" | grep -q "ELF"; then
+                    download_url="$found_url"
+                    matched_repo="$repo"
+                    success=1
+                    break
+                fi
+            fi
+        fi
+    done
+
+    if [[ $success -eq 0 || ! -s "$tmp_appimage" ]]; then
+        rm -f "$tmp_appimage"
+        echo "==> No prebuilt binary found on candidate repositories (${repos_to_check[*]})."
+        return 1
+    fi
+
+    # Verify binary format (ELF magic number)
+    if ! head -c 4 "$tmp_appimage" | grep -q "ELF"; then
+        echo "==> Downloaded file is not a valid ELF executable."
+        rm -f "$tmp_appimage"
+        return 1
+    fi
+
+    echo "==> Successfully downloaded prebuilt binary from: $download_url"
+    echo "==> Installing Bubble AppImage to '$PREFIX'..."
+
+    mkdir -p "$PREFIX/bin" "$PREFIX/share/applications" "$PREFIX/share/icons/hicolor/scalable/apps"
+
+    install -m 755 "$tmp_appimage" "$PREFIX/bin/bubble"
+    rm -f "$tmp_appimage"
+    rm -f "$PREFIX/bin/hyprfm"
+    rm -f "$PREFIX/share/applications/bubble.desktop"
+
+    # Install desktop entry and icon
+    if [[ -f "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.desktop" ]]; then
+        install -m 644 "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.desktop" "$PREFIX/share/applications/"
+    elif command -v curl >/dev/null 2>&1; then
+        curl -sSL -f "https://raw.githubusercontent.com/${BUBBLE_REPO}/main/dist/io.github.soyeb_jim285.Bubble.desktop" \
+            -o "$PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop" 2>/dev/null || true
+    fi
+
+    if [[ -f "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.svg" ]]; then
+        install -m 644 "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.svg" "$PREFIX/share/icons/hicolor/scalable/apps/"
+    elif command -v curl >/dev/null 2>&1; then
+        curl -sSL -f "https://raw.githubusercontent.com/${BUBBLE_REPO}/main/dist/io.github.soyeb_jim285.Bubble.svg" \
+            -o "$PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg" 2>/dev/null || true
+    fi
+
+    # Extract vault helpers if present inside AppImage
+    local extract_tmp
+    extract_tmp="$(mktemp -d /tmp/bubble-extract-XXXXXX)"
+    if (cd "$extract_tmp" && "$PREFIX/bin/bubble" --appimage-extract "usr/bin/bubble-vault-*" >/dev/null 2>&1); then
+        if [[ -f "$extract_tmp/squashfs-root/usr/bin/bubble-vault-destroy" ]]; then
+            install -m 755 "$extract_tmp/squashfs-root/usr/bin/bubble-vault-destroy" "$PREFIX/bin/bubble-vault-destroy" 2>/dev/null || true
+        fi
+        if [[ -f "$extract_tmp/squashfs-root/usr/bin/bubble-vault-helper" ]]; then
+            install -m 755 "$extract_tmp/squashfs-root/usr/bin/bubble-vault-helper" "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+        fi
+    fi
+    rm -rf "$extract_tmp"
+
+    # Setuid permissions for bubble-vault-helper if installed
+    if [[ -x "$PREFIX/bin/bubble-vault-helper" ]]; then
+        if [[ $EUID -eq 0 ]]; then
+            chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+            chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+        elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            sudo chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+            sudo chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+        fi
+    fi
+
+    # Update desktop and icon databases
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true
+    fi
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$PREFIX/share/applications" 2>/dev/null || true
+    fi
+
+    echo
+    echo "=============================================="
+    echo "    Bubble has been successfully installed!   "
+    echo "=============================================="
+    echo " Mode:                Prebuilt Binary (AppImage)"
+    echo " Binary installed to: $PREFIX/bin/bubble"
+    echo " Desktop file:        $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
+    echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
+    echo
+
+    if [[ "$MODE" == "user" && ":$PATH:" != *":$PREFIX/bin:"* ]]; then
+        echo "NOTE: '$PREFIX/bin' is not in your PATH."
+        echo "To run 'bubble' from any terminal, add this to your ~/.bashrc or ~/.zshrc:"
+        echo
+        echo "  export PATH=\"$PREFIX/bin:\$PATH\""
+        echo
+    fi
+
+    echo "You can now launch Bubble by running: bubble"
+    return 0
+}
+
+# Run prebuilt binary installation if requested
+if [[ "$INSTALL_METHOD" == "binary" ]]; then
+    if install_prebuilt_binary; then
+        if [[ $CLEANUP_TMP -eq 1 ]]; then
+            rm -rf "$SCRIPT_DIR"
+        fi
+        exit 0
+    fi
+    echo "==> Falling back to building from source..."
+    INSTALL_METHOD="source"
+fi
+
+# Ensure source repository is available for compilation
+ensure_source_tree
 
 # ==============================================================================
 # Dependency Checking and Auto-Installation
@@ -385,8 +642,8 @@ cmake --install "$BUILD_DIR" --prefix "$PREFIX"
 # Additional integrations
 mkdir -p "$PREFIX/bin" "$PREFIX/share/applications"
 
-# Backward-compatibility symlink: hyprfm -> bubble
-ln -sf bubble "$PREFIX/bin/hyprfm"
+# Clean up any legacy hyprfm symlink/binary
+rm -f "$PREFIX/bin/hyprfm"
 # Clean up old legacy bubble.desktop if present to prevent duplicate application menu entries
 rm -f "$PREFIX/share/applications/bubble.desktop"
 
@@ -395,7 +652,7 @@ if [[ -x "$PREFIX/bin/bubble-vault-helper" ]]; then
     if [[ $EUID -eq 0 ]]; then
         chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
         chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
-    elif command -v sudo >/dev/null 2>&1 && ( [[ $AUTO_YES -eq 1 ]] || sudo -n true 2>/dev/null ); then
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
         sudo chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
         sudo chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
     fi
@@ -406,7 +663,7 @@ fi
 if [[ "$MODE" == "user" && -x "$PREFIX/bin/bubble-vault-helper" && ! -x "/usr/local/bin/bubble-vault-helper" ]]; then
     if [[ $EUID -eq 0 ]]; then
         install -m 4755 -o root -g root "$PREFIX/bin/bubble-vault-helper" /usr/local/bin/bubble-vault-helper 2>/dev/null || true
-    elif command -v sudo >/dev/null 2>&1 && ( [[ $AUTO_YES -eq 1 ]] || sudo -n true 2>/dev/null ); then
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
         sudo install -m 4755 -o root -g root "$PREFIX/bin/bubble-vault-helper" /usr/local/bin/bubble-vault-helper 2>/dev/null || true
     fi
 fi
@@ -433,7 +690,6 @@ echo "=============================================="
 echo " Binary installed to: $PREFIX/bin/bubble"
 echo " Vault cleanup binary: $PREFIX/bin/bubble-vault-destroy"
 echo " Vault helper binary:  $PREFIX/bin/bubble-vault-helper"
-echo " Legacy alias:        $PREFIX/bin/hyprfm"
 echo " Desktop file:        $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
 echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
 echo

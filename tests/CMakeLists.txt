@@ -101,16 +101,23 @@ add_test(NAME tst_diskusageservice COMMAND tst_diskusageservice)
 
 # --- New test targets ---
 
+set(VAULT_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/services/vaultservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/vaultdatabase.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/cryptoengine.cpp
+)
+
 add_executable(tst_filesystemmodel tst_filesystemmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/models/filesystemmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/services/xdgtrash.cpp
     ${CMAKE_SOURCE_DIR}/src/services/gitstatusservice.cpp
+    ${VAULT_SOURCES}
 )
 target_include_directories(tst_filesystemmodel PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/third_party
 )
-target_link_libraries(tst_filesystemmodel PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Svg Qt6::Concurrent)
+target_link_libraries(tst_filesystemmodel PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Svg Qt6::Concurrent Qt6::Sql PkgConfig::ARGON2 OpenSSL::Crypto)
 add_test(NAME tst_filesystemmodel COMMAND tst_filesystemmodel)
 
 add_executable(tst_detailedview tst_detailedview.cpp viewharness.h
@@ -119,6 +126,7 @@ add_executable(tst_detailedview tst_detailedview.cpp viewharness.h
     ${CMAKE_SOURCE_DIR}/src/models/filesystemmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/services/xdgtrash.cpp
     ${CMAKE_SOURCE_DIR}/src/services/gitstatusservice.cpp
+    ${VAULT_SOURCES}
 )
 target_include_directories(tst_detailedview PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -128,7 +136,7 @@ target_compile_definitions(tst_detailedview PRIVATE
     TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     TEST_MODULE_DIR="${CMAKE_BINARY_DIR}/src"
 )
-target_link_libraries(tst_detailedview PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Concurrent PkgConfig::GIO)
+target_link_libraries(tst_detailedview PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Concurrent Qt6::Sql PkgConfig::ARGON2 OpenSSL::Crypto PkgConfig::GIO)
 add_dependencies(tst_detailedview bubble)
 add_test(NAME tst_detailedview COMMAND tst_detailedview)
 
@@ -141,6 +149,7 @@ add_executable(tst_millerview tst_millerview.cpp viewharness.h
     ${CMAKE_SOURCE_DIR}/src/services/previewservice.cpp
     ${CMAKE_SOURCE_DIR}/src/services/metadataextractor.cpp
     ${CMAKE_SOURCE_DIR}/src/services/runtimefeaturesservice.cpp
+    ${VAULT_SOURCES}
 )
 target_include_directories(tst_millerview PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -150,7 +159,7 @@ target_compile_definitions(tst_millerview PRIVATE
     TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     TEST_MODULE_DIR="${CMAKE_BINARY_DIR}/src"
 )
-target_link_libraries(tst_millerview PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Concurrent Qt6::DBus PkgConfig::GIO)
+target_link_libraries(tst_millerview PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Concurrent Qt6::DBus Qt6::Sql PkgConfig::ARGON2 OpenSSL::Crypto PkgConfig::GIO)
 add_dependencies(tst_millerview bubble)
 add_test(NAME tst_millerview COMMAND tst_millerview)
 
@@ -163,6 +172,7 @@ add_executable(tst_viewcontextmenu tst_viewcontextmenu.cpp viewharness.h
     ${CMAKE_SOURCE_DIR}/src/services/previewservice.cpp
     ${CMAKE_SOURCE_DIR}/src/services/metadataextractor.cpp
     ${CMAKE_SOURCE_DIR}/src/services/runtimefeaturesservice.cpp
+    ${VAULT_SOURCES}
 )
 target_include_directories(tst_viewcontextmenu PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -172,7 +182,7 @@ target_compile_definitions(tst_viewcontextmenu PRIVATE
     TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     TEST_MODULE_DIR="${CMAKE_BINARY_DIR}/src"
 )
-target_link_libraries(tst_viewcontextmenu PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Concurrent Qt6::DBus PkgConfig::GIO)
+target_link_libraries(tst_viewcontextmenu PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Concurrent Qt6::DBus Qt6::Sql PkgConfig::ARGON2 OpenSSL::Crypto PkgConfig::GIO)
 add_dependencies(tst_viewcontextmenu bubble)
 add_test(NAME tst_viewcontextmenu COMMAND tst_viewcontextmenu)
 
@@ -184,10 +194,11 @@ add_executable(tst_toolbar tst_toolbar.cpp viewharness.h
     ${CMAKE_SOURCE_DIR}/src/services/gitstatusservice.cpp
     ${CMAKE_SOURCE_DIR}/src/models/tablistmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/models/tabmodel.cpp
+    ${VAULT_SOURCES}
 )
 target_include_directories(tst_toolbar PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/third_party)
 target_compile_definitions(tst_toolbar PRIVATE TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}" TEST_MODULE_DIR="${CMAKE_BINARY_DIR}/src")
-target_link_libraries(tst_toolbar PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Concurrent PkgConfig::GIO)
+target_link_libraries(tst_toolbar PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Concurrent Qt6::Sql PkgConfig::ARGON2 OpenSSL::Crypto PkgConfig::GIO)
 add_dependencies(tst_toolbar bubble)
 add_test(NAME tst_toolbar COMMAND tst_toolbar)
 
@@ -222,6 +233,7 @@ add_executable(tst_mainwindow tst_mainwindow.cpp
     ${CMAKE_SOURCE_DIR}/src/services/metadataextractor.cpp
     ${CMAKE_SOURCE_DIR}/src/providers/thumbnailprovider.cpp
     ${CMAKE_SOURCE_DIR}/src/providers/pdfpreviewprovider.cpp
+    ${VAULT_SOURCES}
 )
 target_include_directories(tst_mainwindow PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/third_party)
 target_compile_definitions(tst_mainwindow PRIVATE
@@ -230,11 +242,8 @@ target_compile_definitions(tst_mainwindow PRIVATE
     BUBBLE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     BUBBLE_DATA_DIR="${CMAKE_SOURCE_DIR}"
     BUBBLE_VERSION="test"
-    HYPRFM_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    HYPRFM_DATA_DIR="${CMAKE_SOURCE_DIR}"
-    HYPRFM_VERSION="test"
 )
-target_link_libraries(tst_mainwindow PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::DBus Qt6::Svg Qt6::Network Qt6::Concurrent PkgConfig::GIO)
+target_link_libraries(tst_mainwindow PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::DBus Qt6::Svg Qt6::Network Qt6::Concurrent Qt6::Sql PkgConfig::ARGON2 OpenSSL::Crypto PkgConfig::GIO)
 add_dependencies(tst_mainwindow bubble)
 add_test(NAME tst_mainwindow COMMAND tst_mainwindow)
 
@@ -284,12 +293,13 @@ add_executable(tst_searchproxymodel tst_searchproxymodel.cpp
     ${CMAKE_SOURCE_DIR}/src/services/xdgtrash.cpp
     ${CMAKE_SOURCE_DIR}/src/models/searchresultsmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/services/gitstatusservice.cpp
+    ${VAULT_SOURCES}
 )
 target_include_directories(tst_searchproxymodel PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/third_party
 )
-target_link_libraries(tst_searchproxymodel PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Svg Qt6::Concurrent)
+target_link_libraries(tst_searchproxymodel PRIVATE Qt6::Test Qt6::Core Qt6::Gui Qt6::Svg Qt6::Concurrent Qt6::Sql PkgConfig::ARGON2 OpenSSL::Crypto)
 add_test(NAME tst_searchproxymodel COMMAND tst_searchproxymodel)
 
 add_executable(tst_searchservice tst_searchservice.cpp
