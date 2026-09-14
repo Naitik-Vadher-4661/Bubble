@@ -31,4 +31,9 @@ for plugin in libqmng libqjp2 libqtga libqwbmp libqicns; do
 done
 rm -f "$appdir"/usr/lib/libmng.so* "$appdir"/usr/lib/libjasper.so*
 
+# Bubble only uses SQLite
+if [ -d "$appdir/usr/plugins/sqldrivers" ]; then
+    find "$appdir/usr/plugins/sqldrivers" -type f ! -name "libqsqlite.so" -delete 2>/dev/null || true
+fi
+
 du -sh "$appdir" | sed 's/^/AppDir after prune: /'

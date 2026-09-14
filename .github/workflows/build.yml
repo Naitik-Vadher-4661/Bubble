@@ -186,6 +186,12 @@ jobs:
           set -euo pipefail
           QT_PLUGIN_DIR=$(qmake6 -query QT_INSTALL_PLUGINS 2>/dev/null || qmake -query QT_INSTALL_PLUGINS)
 
+          # Only SQLite is needed for Bubble; remove unused drivers (mimer, psql, odbc)
+          # that pull missing external libraries (e.g. libmimerapi.so) on CI runners.
+          if [ -d "$QT_PLUGIN_DIR/sqldrivers" ]; then
+            find "$QT_PLUGIN_DIR/sqldrivers" -type f ! -name "libqsqlite.so" -delete || true
+          fi
+
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --plugin qt \
