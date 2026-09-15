@@ -87,7 +87,9 @@ Rectangle {
             height: 44
 
             Row {
-                anchors.centerIn: parent
+                anchors.left: parent.left
+                anchors.leftMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
 
                 Image {
