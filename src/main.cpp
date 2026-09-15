@@ -37,6 +37,7 @@
 #include "models/filesystemmodel.h"
 #include "models/tablistmodel.h"
 #include "models/bookmarkmodel.h"
+#include "models/starredmodel.h"
 #include "models/devicemodel.h"
 #include "models/recentfilesmodel.h"
 #include "models/searchresultsmodel.h"
@@ -460,6 +461,14 @@ int main(int argc, char *argv[])
         config->saveBookmarks(bookmarks->paths(), bookmarks->names());
     });
 
+    StarredModel *starredModel = new StarredModel(&app);
+    starredModel->setStarredItems(config->starredItems());
+
+    // Persist starred item changes to config
+    QObject::connect(starredModel, &StarredModel::starredChanged, [=]() {
+        config->saveStarredItems(starredModel->starredItems());
+    });
+
     FileOperations *fileOps = new FileOperations(&app);
     UndoManager *undoManager = new UndoManager(fileOps, &app);
     ClipboardManager *clipboard = new ClipboardManager(&app);
@@ -530,6 +539,7 @@ int main(int argc, char *argv[])
     QObject::connect(config, &ConfigManager::configChanged, [=, &app, &resolveUiFont]() {
         theme->loadTheme(config->theme(), themeDirs);
         bookmarks->setBookmarks(config->bookmarks(), config->bookmarkNames());
+        starredModel->setStarredItems(config->starredItems());
         fsModel->setShowHidden(config->showHidden());
         splitFsModel->setShowHidden(config->showHidden());
         millerParentModel->setShowHidden(config->showHidden());
@@ -592,6 +602,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("theme", theme);
     engine.rootContext()->setContextProperty("tabModel", tabModel);
     engine.rootContext()->setContextProperty("bookmarks", bookmarks);
+    engine.rootContext()->setContextProperty("starredModel", starredModel);
     engine.rootContext()->setContextProperty("fileOps", fileOps);
     engine.rootContext()->setContextProperty("undoManager", undoManager);
     engine.rootContext()->setContextProperty("clipboard", clipboard);

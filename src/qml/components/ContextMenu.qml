@@ -51,6 +51,7 @@ Item {
     signal unlockRequested(string path, bool isDir)
     signal relockRequested(string path, bool isDir)
     signal changePasswordRequested(string path)
+    signal starRequested(var paths)
 
     // Menus grow to fit their widest row instead of clipping it (issue #13).
     // The measurements mirror the row layouts below: margins, icon slots,
@@ -704,6 +705,13 @@ Item {
                 items.push({ text: "Cut", shortcut: "Ctrl+X", action: "cut", icon: "Scissors" })
                 items.push({ text: "Copy", shortcut: "Ctrl+C", action: "copy", icon: "Copy" })
                 items.push({ text: "Copy Path", shortcut: "", action: "copypath", icon: "CopyPath" })
+                var isStarred = (typeof starredModel !== "undefined" && starredModel)
+                    ? starredModel.isStarred(targetPath) : false
+                var starText = isStarred ? "Unstar" : "Star"
+                if (effectivePaths.length > 1) {
+                    starText = isStarred ? "Unstar " + effectivePaths.length + " Items" : "Star " + effectivePaths.length + " Items"
+                }
+                items.push({ text: starText, shortcut: "", action: "star_toggle", icon: "Star" })
                 items.push({ separator: true })
 
                 // Compress submenu — always available for files/folders
@@ -823,6 +831,24 @@ Item {
         case "cut": cutRequested(effectivePaths); break
         case "copy": copyRequested(effectivePaths); break
         case "copypath": copyPathRequested(targetPath); break
+        case "star_toggle":
+            starRequested(effectivePaths)
+            if (typeof starredModel !== "undefined" && starredModel) {
+                var allStarred = true
+                for (var s = 0; s < effectivePaths.length; ++s) {
+                    if (!starredModel.isStarred(effectivePaths[s])) {
+                        allStarred = false
+                        break
+                    }
+                }
+                for (var s = 0; s < effectivePaths.length; ++s) {
+                    if (allStarred)
+                        starredModel.unstarPath(effectivePaths[s])
+                    else
+                        starredModel.starPath(effectivePaths[s])
+                }
+            }
+            break
         case "rename": renameRequested(targetPath); break
         case "bulkrename": bulkRenameRequested(effectivePaths); break
         case "trash": trashRequested(effectivePaths); break

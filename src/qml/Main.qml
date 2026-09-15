@@ -6,6 +6,7 @@ import QtQuick.Shapes
 import QtQuick.Window
 import Bubble
 import "components" as Components
+import "views" as Views
 import Quill as Q
 
 ApplicationWindow {
@@ -50,6 +51,22 @@ ApplicationWindow {
     readonly property string unifiedTrashPath: "trash:///"
     readonly property bool isTrashView: fileOps.isTrashPath(panePath(activePane))
     readonly property bool isRemoteView: fileOps.isRemotePath(panePath(activePane))
+    readonly property bool isPrimaryAtHome: {
+        if (!tabModel.activeTab)
+            return true
+        var cur = tabModel.activeTab.currentPath
+        var home = fsModel.homePath()
+        if (cur.length > 1 && cur.endsWith("/")) cur = cur.slice(0, -1)
+        if (home.length > 1 && home.endsWith("/")) home = home.slice(0, -1)
+        return cur === home
+    }
+    readonly property bool homeStarredPartitionActive: {
+        return isPrimaryAtHome
+            && config.homeStarredPartitionEnabled
+            && !root.splitViewPresented
+            && !root.primaryPaneIsRecents
+            && !root.primaryPaneSearchMode
+    }
 
     // ── Sync fsModel when active tab changes; quit on last tab closed ───────
     Connections {
@@ -2901,6 +2918,25 @@ ApplicationWindow {
 
         onDeleteRequested: (paths) => root.requestDelete(paths)
 
+        onStarRequested: (paths) => {
+            if (typeof starredModel !== "undefined" && starredModel) {
+                var allStarred = true
+                for (var s = 0; s < paths.length; ++s) {
+                    if (!starredModel.isStarred(paths[s])) {
+                        allStarred = false
+                        break
+                    }
+                }
+                for (var s = 0; s < paths.length; ++s) {
+                    if (allStarred)
+                        starredModel.unstarPath(paths[s])
+                    else
+                        starredModel.starPath(paths[s])
+                }
+                toast.show(allStarred ? "Removed from Starred" : "Added to Starred", "info")
+            }
+        }
+
         onLockRequested: (paths, isDir) => {
             lockPasswordDialog.openForLock(paths, isDir)
         }
@@ -4004,30 +4040,141 @@ ApplicationWindow {
                                 activePaneHeader: root.activePane === "primary"
                             }
 
-                            FileViewContainer {
-                                id: primaryFileViewContainer
-                                objectName: "primaryFileView"
+                            Item {
+                                id: homeContainer
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                fileModel: root.paneModel("primary")
-                                viewMode: tabModel.activeTab ? tabModel.activeTab.viewMode : "grid"
-                                currentPath: root.panePath("primary")
 
-                                onInteractionStarted: root.setActivePane("primary")
-                                onFileActivated: (filePath, isDirectory) => root.handlePaneFileActivated("primary", filePath, isDirectory)
-                                onSelectionChanged: {
-                                    root.setActivePane("primary")
-                                    root.updateSelectionStatus()
+                                readonly property real splitRatio: config.homeStarredPartitionSplitRatio
+                                readonly property bool isSideBySide: config.homeStarredPartitionOrientation !== "stacked"
+                                readonly property bool showStarred: root.homeStarredPartitionActive
+
+                                // Primary file view container
+                                FileViewContainer {
+                                    id: primaryFileViewContainer
+                                    objectName: "primaryFileView"
+                                    x: 0
+                                    y: (!homeContainer.showStarred || homeContainer.isSideBySide) ? 0 : (homeSplitter.y + homeSplitter.height)
+                                    width: {
+                                        if (!homeContainer.showStarred)
+                                            return homeContainer.width
+                                        if (homeContainer.isSideBySide)
+                                            return Math.max(140, Math.min(homeContainer.width - 140, Math.round(homeContainer.width * homeContainer.splitRatio) - 4))
+                                        return homeContainer.width
+                                    }
+                                    height: {
+                                        if (!homeContainer.showStarred)
+                                            return homeContainer.height
+                                        if (!homeContainer.isSideBySide)
+                                            return Math.max(0, homeContainer.height - (homeSplitter.y + homeSplitter.height))
+                                        return homeContainer.height
+                                    }
+                                    fileModel: root.paneModel("primary")
+                                    viewMode: tabModel.activeTab ? tabModel.activeTab.viewMode : "grid"
+                                    currentPath: root.panePath("primary")
+
+                                    onInteractionStarted: root.setActivePane("primary")
+                                    onFileActivated: (filePath, isDirectory) => root.handlePaneFileActivated("primary", filePath, isDirectory)
+                                    onSelectionChanged: {
+                                        root.setActivePane("primary")
+                                        root.updateSelectionStatus()
+                                    }
+                                    onTransferRequested: (paths, destinationPath, moveOperation) => {
+                                        root.setActivePane("primary")
+                                        root.beginTransfer(paths, destinationPath, moveOperation, false)
+                                    }
+                                    onContextMenuRequested: (filePath, isDirectory, position) =>
+                                        root.showContextMenuForPane("primary", filePath, isDirectory, position)
+                                    onSortRequested: (column, ascending) => {
+                                        root.setActivePane("primary")
+                                        root.applySortChange(column, ascending)
+                                    }
                                 }
-                                onTransferRequested: (paths, destinationPath, moveOperation) => {
-                                    root.setActivePane("primary")
-                                    root.beginTransfer(paths, destinationPath, moveOperation, false)
+
+                                // Splitter handle between Home files and Starred items
+                                Rectangle {
+                                    id: homeSplitter
+                                    visible: homeContainer.showStarred
+                                    x: homeContainer.isSideBySide ? primaryFileViewContainer.width : 0
+                                    y: homeContainer.isSideBySide ? 0 : starredPartitionView.height
+                                    width: homeContainer.isSideBySide ? 8 : homeContainer.width
+                                    height: homeContainer.isSideBySide ? homeContainer.height : 8
+                                    color: "transparent"
+                                    z: 10
+
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: homeContainer.isSideBySide ? 1 : parent.width - 16
+                                        height: homeContainer.isSideBySide ? parent.height - 16 : 1
+                                        color: splitterHover.containsMouse
+                                            ? Theme.accent
+                                            : Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.12)
+                                        Behavior on color { ColorAnimation { duration: Theme.animDurationFast } }
+                                    }
+
+                                    // Grab handle pill
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: homeContainer.isSideBySide ? 4 : 24
+                                        height: homeContainer.isSideBySide ? 24 : 4
+                                        radius: 2
+                                        color: splitterHover.containsMouse
+                                            ? Theme.accent
+                                            : Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.25)
+                                        Behavior on color { ColorAnimation { duration: Theme.animDurationFast } }
+                                    }
+
+                                    MouseArea {
+                                        id: splitterHover
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: homeContainer.isSideBySide ? Qt.SplitHCursor : Qt.SplitVCursor
+
+                                        onPositionChanged: (mouse) => {
+                                            if (pressed) {
+                                                if (homeContainer.isSideBySide) {
+                                                    var targetX = mapToItem(homeContainer, mouse.x, 0).x
+                                                    var r = Math.max(0.2, Math.min(0.8, targetX / homeContainer.width))
+                                                    config.saveHomeStarredPartitionSplitRatio(r)
+                                                } else {
+                                                    var targetY = mapToItem(homeContainer, 0, mouse.y).y
+                                                    var rY = Math.max(0.2, Math.min(0.8, targetY / homeContainer.height))
+                                                    config.saveHomeStarredPartitionSplitRatio(rY)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                onContextMenuRequested: (filePath, isDirectory, position) =>
-                                    root.showContextMenuForPane("primary", filePath, isDirectory, position)
-                                onSortRequested: (column, ascending) => {
-                                    root.setActivePane("primary")
-                                    root.applySortChange(column, ascending)
+
+                                // Starred items partition view
+                                Views.StarredPartitionView {
+                                    id: starredPartitionView
+                                    visible: homeContainer.showStarred
+                                    x: homeContainer.isSideBySide ? (homeSplitter.x + homeSplitter.width) : 0
+                                    y: 0
+                                    width: {
+                                        if (!homeContainer.showStarred)
+                                            return 0
+                                        if (homeContainer.isSideBySide)
+                                            return Math.max(0, homeContainer.width - (homeSplitter.x + homeSplitter.width))
+                                        return homeContainer.width
+                                    }
+                                    height: {
+                                        if (!homeContainer.showStarred)
+                                            return 0
+                                        if (!homeContainer.isSideBySide)
+                                            return Math.max(100, Math.min(homeContainer.height - 100, Math.round(homeContainer.height * homeContainer.splitRatio) - 4))
+                                        return homeContainer.height
+                                    }
+
+                                    onFileActivated: (filePath, isDirectory) =>
+                                        root.handlePaneFileActivated("primary", filePath, isDirectory)
+                                    onOpenFolderRequested: (folderPath) =>
+                                        root.navigateActivePaneTo(folderPath)
+                                    onContextMenuRequested: (filePath, isDirectory, position) => {
+                                        var mapped = mapToItem(root, position.x, position.y)
+                                        root.showContextMenuForPane("primary", filePath, isDirectory, mapped)
+                                    }
                                 }
                             }
                         }
