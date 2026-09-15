@@ -2160,6 +2160,14 @@ int FileOperations::compressFiles(const QStringList &paths, const QString &forma
 
             report(0, totalFiles, {});
 
+            if (pauseRequested->loadRelaxed()) {
+                while (pauseRequested->loadRelaxed() && !cancelled->loadRelaxed()) {
+                    QThread::msleep(50);
+                }
+                if (cancelled->loadRelaxed())
+                    return QStringLiteral("Compression failed");
+            }
+
             // Run with verbose output and count lines for progress
             QProcess pr;
             pr.setWorkingDirectory(parentDir);
@@ -2168,15 +2176,33 @@ int FileOperations::compressFiles(const QStringList &paths, const QString &forma
             if (!pr.waitForStarted(5000))
                 return missingToolMessage(program);
             processId->storeRelaxed(static_cast<int>(pr.processId()));
-            if (pauseRequested->loadRelaxed())
+            if (pauseRequested->loadRelaxed()) {
                 suspendProcess(processId.data());
+                while (pauseRequested->loadRelaxed() && !cancelled->loadRelaxed()) {
+                    QThread::msleep(50);
+                }
+                if (cancelled->loadRelaxed())
+                    return QStringLiteral("Compression failed");
+                resumeProcess(processId.data());
+            }
 
             int processed = 0;
             while (pr.state() != QProcess::NotRunning || pr.bytesAvailable()) {
                 if (cancelled->loadRelaxed())
                     break;
+                if (pauseRequested->loadRelaxed()) {
+                    suspendProcess(processId.data());
+                    while (pauseRequested->loadRelaxed() && !cancelled->loadRelaxed()) {
+                        QThread::msleep(50);
+                    }
+                    if (cancelled->loadRelaxed())
+                        break;
+                    resumeProcess(processId.data());
+                }
                 if (!pr.bytesAvailable())
                     pr.waitForReadyRead(200);
+                if (pauseRequested->loadRelaxed())
+                    continue;
                 const QByteArray chunk = pr.read(65536);
                 if (chunk.isEmpty())
                     continue;
@@ -2277,13 +2303,28 @@ int FileOperations::extractArchive(const QString &archivePath, const QString &de
                 ? qMax<qint64>(totalUnits >> 16, 1) : totalUnits;
             report(0, static_cast<int>(reportTotal), {});
 
+            if (pauseRequested->loadRelaxed()) {
+                while (pauseRequested->loadRelaxed() && !cancelled->loadRelaxed()) {
+                    QThread::msleep(50);
+                }
+                if (cancelled->loadRelaxed())
+                    return QStringLiteral("Extraction failed");
+            }
+
             pr.setProcessChannelMode(QProcess::MergedChannels);
             pr.start(program, verboseArgs);
             if (!pr.waitForStarted(5000))
                 return missingToolMessage(program);
             processId->storeRelaxed(static_cast<int>(pr.processId()));
-            if (pauseRequested->loadRelaxed())
+            if (pauseRequested->loadRelaxed()) {
                 suspendProcess(processId.data());
+                while (pauseRequested->loadRelaxed() && !cancelled->loadRelaxed()) {
+                    QThread::msleep(50);
+                }
+                if (cancelled->loadRelaxed())
+                    return QStringLiteral("Extraction failed");
+                resumeProcess(processId.data());
+            }
 
             QList<QByteArray> outputLines;
             qint64 processed = 0;
@@ -2297,8 +2338,20 @@ int FileOperations::extractArchive(const QString &archivePath, const QString &de
             while (pr.state() != QProcess::NotRunning || pr.bytesAvailable()) {
                 if (cancelled->loadRelaxed())
                     break;
+                if (pauseRequested->loadRelaxed()) {
+                    suspendProcess(processId.data());
+                    while (pauseRequested->loadRelaxed() && !cancelled->loadRelaxed()) {
+                        QThread::msleep(50);
+                    }
+                    if (cancelled->loadRelaxed())
+                        break;
+                    resumeProcess(processId.data());
+                    sizeScanTimer.restart();
+                }
                 if (!pr.bytesAvailable())
                     pr.waitForReadyRead(200);
+                if (pauseRequested->loadRelaxed())
+                    continue;
                 QByteArray chunk;
                 if (pr.bytesAvailable()) {
                     chunk = pr.read(65536);
@@ -2457,12 +2510,12 @@ bool FileOperations::isArchive(const QString &path)
 void FileOperations::pauseTransfer(int transferId)
 {
     auto pauseOne = [](ActiveTransfer &t) {
+        if (t.pauseRequested)
+            t.pauseRequested->storeRelaxed(1);
         if (t.worker)
             t.worker->pause();
         else
             suspendProcess(t.processId.data());
-        if (t.pauseRequested)
-            t.pauseRequested->storeRelaxed(1);
         t.paused = true;
         t.statusText = QStringLiteral("Paused");
     };
@@ -2478,12 +2531,12 @@ void FileOperations::pauseTransfer(int transferId)
 void FileOperations::resumeTransfer(int transferId)
 {
     auto resumeOne = [](ActiveTransfer &t) {
+        if (t.pauseRequested)
+            t.pauseRequested->storeRelaxed(0);
         if (t.worker)
             t.worker->resume();
         else
             resumeProcess(t.processId.data());
-        if (t.pauseRequested)
-            t.pauseRequested->storeRelaxed(0);
         t.paused = false;
     };
     if (transferId < 0) {
@@ -2556,6 +2609,8 @@ int FileOperations::startSimpleOperation(const QString &statusText, const QStrin
     auto reportProgress = [this, id](int current, int total, const QString &fileName) {
         QMetaObject::invokeMethod(this, [this, id, current, total, fileName]() {
             if (auto *t = findTransfer(id)) {
+                if (t->paused)
+                    return;
                 t->progress = progressFraction(current, total);
                 t->currentFile = fileName;
                 emitAggregatedState();
@@ -2633,6 +2688,8 @@ int FileOperations::startGioTransfer(const QVariantList &operations, bool moveOp
     connect(worker, &GioTransferWorker::progressUpdated, this,
             [this, id](double progress, const QString &speed, const QString &eta) {
         if (auto *t = findTransfer(id)) {
+            if (t->paused)
+                return;
             t->progress = progress;
             t->speed = speed;
             t->eta = eta;
