@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="dist/io.github.soyeb_jim285.Bubble.svg" width="100" alt="Bubble Logo"/>
-
-# Bubble
+<img src="dist/io.github.soyeb_jim285.Bubble.svg" width="200" alt="Bubble Logo"/>
 
 **A fast, modern Wayland file manager with Miller columns and a built-in Secure Vault.**
 
@@ -24,13 +22,6 @@
 </div>
 
 Bubble is a lightweight, responsive Qt6/QML desktop file manager engineered natively for Wayland and Hyprland. Combining **macOS Finder-style Miller columns**, buttery-smooth kinetic scrolling, and **AES-256 encrypted file vaults**, Bubble offers the speed of a keyboard-driven workflow with the polish of a modern desktop utility.
-
-<div align="center">
-
-![Bubble Demo](docs/screenshots/demo.gif)
-*Miller column navigation with live file previews and batch operations*
-
-</div>
 
 ---
 
@@ -92,10 +83,6 @@ curl -fsSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/uninstall.sh 
 ## Secure File & Folder Vault
 
 Bubble includes a built-in cryptographic vault that lets you lock sensitive files and directories directly from the file manager with zero complex setup.
-
-<div align="center">
-
-![Quick Preview](docs/screenshots/quick-preview.png)
 *Lock files instantly from context menus or with a single keyboard shortcut*
 
 </div>
@@ -119,13 +106,6 @@ Bubble includes a built-in cryptographic vault that lets you lock sensitive file
 - **Detailed List View (`Ctrl+3`)**: Sortable columns (Name, Size, Modified, Type, Permissions, Git status).
 - **Quick Preview (`Space`)**: Instant full-screen modal preview for high-resolution images, video posters, PDFs, and syntax-highlighted code.
 - **Dual-Pane Split (`F3`)**: Side-by-side independent navigation panes for rapid drag & drop and cross-folder management.
-
-<div align="center">
-
-![Miller Columns](docs/screenshots/miller-view.png)
-*Miller column navigation with rich syntax highlighting and preview pane*
-
-</div>
 
 ### Desktop & Wayland Integration
 - **Compositor Blur**: Native Wayland surface transparency and background blur support on Hyprland and KDE Plasma.
