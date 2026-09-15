@@ -57,6 +57,10 @@ class ConfigManager : public QObject
     Q_PROPERTY(QVariantMap shortcutMap READ shortcutMap NOTIFY configChanged)
     Q_PROPERTY(QVariantList customContextActions READ customContextActions NOTIFY configChanged)
     Q_PROPERTY(QVariantList shortcutDefinitions READ shortcutDefinitions NOTIFY configChanged)
+    Q_PROPERTY(bool homeStarredPartitionEnabled READ homeStarredPartitionEnabled NOTIFY configChanged)
+    Q_PROPERTY(QString homeStarredPartitionOrientation READ homeStarredPartitionOrientation NOTIFY configChanged)
+    Q_PROPERTY(double homeStarredPartitionSplitRatio READ homeStarredPartitionSplitRatio NOTIFY configChanged)
+    Q_PROPERTY(QStringList starredItems READ starredItems NOTIFY starredItemsChanged)
 
 public:
     explicit ConfigManager(const QString &configPath, QObject *parent = nullptr,
@@ -100,6 +104,10 @@ public:
     QStringList bookmarks() const;
     // Custom bookmark display names keyed by the entry in bookmarks().
     QVariantMap bookmarkNames() const;
+    bool homeStarredPartitionEnabled() const;
+    QString homeStarredPartitionOrientation() const;
+    double homeStarredPartitionSplitRatio() const;
+    QStringList starredItems() const;
     int radiusSmall() const;
     int radiusMedium() const;
     int radiusLarge() const;
@@ -133,6 +141,8 @@ public:
                                    bool ascending);
     Q_INVOKABLE void saveShortcuts(const QVariantMap &shortcuts);
     Q_INVOKABLE void saveBookmarks(const QStringList &paths, const QVariantMap &names = {});
+    Q_INVOKABLE void saveStarredItems(const QStringList &items);
+    Q_INVOKABLE void saveHomeStarredPartitionSplitRatio(double ratio);
     Q_INVOKABLE void saveListColumns(const QStringList &columns, const QVariantMap &widths);
     Q_INVOKABLE void saveMillerFractions(double parent, double current);
     Q_INVOKABLE void saveSidebarWidth(int width);
@@ -142,6 +152,7 @@ signals:
     void configErrorChanged();
     void listColumnsChanged();
     void millerFractionsChanged();
+    void starredItemsChanged();
 
 private:
     void loadConfig();
@@ -184,6 +195,10 @@ private:
     void setMillerFractionsClamped(double parent, double current);
     QStringList m_bookmarks;
     QVariantMap m_bookmarkNames;
+    bool m_homeStarredPartitionEnabled = true;
+    QString m_homeStarredPartitionOrientation = QStringLiteral("side_by_side");
+    double m_homeStarredPartitionSplitRatio = 0.5;
+    QStringList m_starredItems;
     int m_radiusSmall;
     int m_radiusMedium;
     int m_radiusLarge;

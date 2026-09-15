@@ -30,6 +30,7 @@ Rectangle {
     clip: false
 
     Component { id: iconHome; IconHome { size: 18; color: Theme.subtext } }
+    Component { id: iconStar; IconStar { size: 18; color: Theme.subtext } }
     Component { id: iconClock; IconClock { size: 18; color: Theme.subtext } }
     Component { id: iconTrash; IconTrash { size: 18; color: Theme.subtext } }
     Component { id: iconImage; IconImage { size: 18; color: Theme.subtext } }
@@ -112,6 +113,7 @@ Rectangle {
             Repeater {
                 model: ListModel {
                     ListElement { name: "Home"; iconType: "home" }
+                    ListElement { name: "Starred"; iconType: "star" }
                     ListElement { name: "Recents"; iconType: "clock" }
                     ListElement { name: "Trash"; iconType: "trash" }
                     ListElement { name: "Network"; iconType: "globe" }
@@ -128,7 +130,7 @@ Rectangle {
 
                     readonly property string resolvedPath: {
                         const home = fsModel.homePath()
-                        if (model.name === "Home") return home
+                        if (model.name === "Home" || model.name === "Starred") return home
                         if (model.name === "Recents") return ""
                         if (model.name === "Trash") return root.trashPath
                         if (model.name === "Network") return "network:///"
@@ -169,6 +171,7 @@ Rectangle {
                             anchors.verticalCenter: parent.verticalCenter
                             sourceComponent: {
                                 if (model.iconType === "home") return iconHome
+                                if (model.iconType === "star") return iconStar
                                 if (model.iconType === "clock") return iconClock
                                 if (model.iconType === "trash") return iconTrash
                                 if (model.iconType === "monitor") return iconMonitor

@@ -45,6 +45,13 @@ target_include_directories(tst_bookmarkmodel PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(tst_bookmarkmodel PRIVATE Qt6::Test Qt6::Core)
 add_test(NAME tst_bookmarkmodel COMMAND tst_bookmarkmodel)
 
+add_executable(tst_starredmodel tst_starredmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/starredmodel.cpp
+)
+target_include_directories(tst_starredmodel PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(tst_starredmodel PRIVATE Qt6::Test Qt6::Core)
+add_test(NAME tst_starredmodel COMMAND tst_starredmodel)
+
 add_executable(tst_fileoperations tst_fileoperations.cpp
     ${CMAKE_SOURCE_DIR}/src/services/fileoperations.cpp
     ${CMAKE_SOURCE_DIR}/src/services/xdgtrash.cpp

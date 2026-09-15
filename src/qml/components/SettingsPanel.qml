@@ -82,8 +82,10 @@ Window {
     property bool draftDependencyStartupCheck: config.dependencyStartupCheck
     property bool draftSidebarVisible: currentSidebarVisible
     // Must stay in sync with the quick-access entries in Sidebar.qml.
-    readonly property var quickAccessNames: ["Home", "Recents", "Trash", "Network", "Pictures", "Downloads"]
+    readonly property var quickAccessNames: ["Home", "Starred", "Recents", "Trash", "Network", "Pictures", "Downloads"]
     property var draftHiddenQuickAccess: config.hiddenQuickAccess
+    property bool draftHomeStarredPartitionEnabled: config.homeStarredPartitionEnabled
+    property string draftHomeStarredPartitionOrientation: config.homeStarredPartitionOrientation
     property string draftSidebarPosition: config.sidebarPosition
     property int draftSidebarWidth: currentSidebarWidth
     property int draftRadiusSmall: config.radiusSmall
@@ -285,6 +287,8 @@ Window {
         draftSortBy = defaultSortBy
         draftSortAscending = defaultSortAscending
         draftRememberSortPerFolder = defaultRememberSortPerFolder
+        draftHomeStarredPartitionEnabled = true
+        draftHomeStarredPartitionOrientation = "side_by_side"
         applySettingsNow()
     }
 
@@ -330,6 +334,8 @@ Window {
             draftSortBy = config.sortBy
             draftSortAscending = config.sortAscending
             draftRememberSortPerFolder = config.rememberSortPerFolder
+            draftHomeStarredPartitionEnabled = config.homeStarredPartitionEnabled
+            draftHomeStarredPartitionOrientation = config.homeStarredPartitionOrientation
         } finally {
             syncingFromConfig = false
         }
@@ -400,7 +406,9 @@ Window {
             windowButtonLayout: draftWindowButtonLayout,
             sortBy: draftSortBy,
             sortAscending: draftSortAscending,
-            rememberSortPerFolder: draftRememberSortPerFolder
+            rememberSortPerFolder: draftRememberSortPerFolder,
+            homeStarredPartitionEnabled: draftHomeStarredPartitionEnabled,
+            homeStarredPartitionOrientation: draftHomeStarredPartitionOrientation
         }
     }
 
@@ -847,6 +855,37 @@ Window {
                 checked: root.draftRememberSortPerFolder
                 onToggled: (value) => {
                     root.draftRememberSortPerFolder = value
+                    root.applySettingsNow()
+                }
+            }
+
+            Text {
+                text: "Home Starred Partition"
+                color: Theme.accent
+                font.pointSize: Theme.fontSmall
+                font.bold: true
+                Layout.topMargin: 12
+                Layout.bottomMargin: 4
+            }
+
+            Q.Toggle {
+                Layout.fillWidth: true
+                label: "Starred partition on Home"
+                checked: root.draftHomeStarredPartitionEnabled
+                onToggled: (value) => {
+                    root.draftHomeStarredPartitionEnabled = value
+                    root.applySettingsNow()
+                }
+            }
+
+            Q.Dropdown {
+                Layout.fillWidth: true
+                label: "Partition orientation"
+                enabled: root.draftHomeStarredPartitionEnabled
+                model: ["Side-by-Side (Left / Right)", "Stacked (Top / Bottom)"]
+                currentIndex: root.draftHomeStarredPartitionOrientation === "stacked" ? 1 : 0
+                onSelected: (index, _) => {
+                    root.draftHomeStarredPartitionOrientation = index === 1 ? "stacked" : "side_by_side"
                     root.applySettingsNow()
                 }
             }

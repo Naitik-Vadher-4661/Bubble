@@ -10,6 +10,7 @@ set(BUBBLE_SOURCES
     models/tabmodel.cpp
     models/tablistmodel.cpp
     models/bookmarkmodel.cpp
+    models/starredmodel.cpp
     models/filesystemmodel.cpp
     models/devicemodel.cpp
     models/recentfilesmodel.cpp
@@ -61,6 +62,7 @@ if(BUBBLE_ENABLE_UNITY_BUILD)
     # (multiple files define local helpers like isRemoteUri/parentLocation)
     set_source_files_properties(
         models/bookmarkmodel.cpp
+        models/starredmodel.cpp
         models/tabmodel.cpp
         models/filesystemmodel.cpp
         services/fileoperations.cpp
@@ -110,6 +112,7 @@ list(APPEND bubble_qml_module_args
         qml/views/FileGridView.qml
         qml/views/FileDetailedView.qml
         qml/views/FileMillerView.qml
+        qml/views/StarredPartitionView.qml
         qml/views/KineticWheelScroller.qml
         qml/icons/IconAlertCircle.qml
         qml/icons/IconAlignJustify.qml

@@ -294,6 +294,10 @@ void ConfigManager::setDefaults()
     setMillerFractionsClamped(0.2, 0.5);
     m_bookmarks = defaultBookmarkPaths();
     m_bookmarkNames.clear();
+    m_homeStarredPartitionEnabled = true;
+    m_homeStarredPartitionOrientation = QStringLiteral("side_by_side");
+    m_homeStarredPartitionSplitRatio = 0.5;
+    m_starredItems.clear();
     m_radiusSmall = 4;
     m_radiusMedium = 8;
     m_radiusLarge = 12;
@@ -450,6 +454,21 @@ void ConfigManager::loadConfig()
                 if (auto v = val.value<std::string>())
                     m_bookmarkNames.insert(QString::fromStdString(std::string(key)),
                                            QString::fromStdString(*v));
+            }
+        }
+
+        if (auto v = config["layout"]["home_starred_partition_enabled"].value<bool>())
+            m_homeStarredPartitionEnabled = *v;
+        if (auto v = config["layout"]["home_starred_partition_orientation"].value<std::string>())
+            m_homeStarredPartitionOrientation = QString::fromStdString(*v);
+        if (auto v = config["layout"]["home_starred_partition_split_ratio"].value<double>())
+            m_homeStarredPartitionSplitRatio = qBound(0.1, *v, 0.9);
+
+        if (auto arr = config["starred"]["paths"].as_array()) {
+            m_starredItems.clear();
+            for (const auto &item : *arr) {
+                if (auto v = item.value<std::string>())
+                    m_starredItems.append(QString::fromStdString(*v));
             }
         }
 
@@ -840,6 +859,10 @@ bool ConfigManager::sidebarVisible() const { return m_sidebarVisible; }
 QStringList ConfigManager::hiddenQuickAccess() const { return m_hiddenQuickAccess; }
 QStringList ConfigManager::bookmarks() const { return m_bookmarks; }
 QVariantMap ConfigManager::bookmarkNames() const { return m_bookmarkNames; }
+bool ConfigManager::homeStarredPartitionEnabled() const { return m_homeStarredPartitionEnabled; }
+QString ConfigManager::homeStarredPartitionOrientation() const { return m_homeStarredPartitionOrientation; }
+double ConfigManager::homeStarredPartitionSplitRatio() const { return m_homeStarredPartitionSplitRatio; }
+QStringList ConfigManager::starredItems() const { return m_starredItems; }
 int ConfigManager::radiusSmall() const { return m_radiusSmall; }
 int ConfigManager::radiusMedium() const { return m_radiusMedium; }
 int ConfigManager::radiusLarge() const { return m_radiusLarge; }
@@ -1033,6 +1056,31 @@ void ConfigManager::saveSettings(const QVariantMap &settings)
 
     if (!sidebar.empty())
         config.insert_or_assign("sidebar", std::move(sidebar));
+
+    toml::table layout;
+    if (auto existingLayout = config["layout"].as_table())
+        layout = *existingLayout;
+
+    if (settings.contains("homeStarredPartitionEnabled")) {
+        m_homeStarredPartitionEnabled = settings.value("homeStarredPartitionEnabled").toBool();
+        layout.insert_or_assign("home_starred_partition_enabled", m_homeStarredPartitionEnabled);
+    }
+
+    if (settings.contains("homeStarredPartitionOrientation")) {
+        const QString ori = settings.value("homeStarredPartitionOrientation").toString().trimmed();
+        if (ori == "side_by_side" || ori == "stacked") {
+            m_homeStarredPartitionOrientation = ori;
+            layout.insert_or_assign("home_starred_partition_orientation", ori.toStdString());
+        }
+    }
+
+    if (settings.contains("homeStarredPartitionSplitRatio")) {
+        m_homeStarredPartitionSplitRatio = qBound(0.1, settings.value("homeStarredPartitionSplitRatio").toDouble(), 0.9);
+        layout.insert_or_assign("home_starred_partition_split_ratio", m_homeStarredPartitionSplitRatio);
+    }
+
+    if (!layout.empty())
+        config.insert_or_assign("layout", std::move(layout));
 
     const bool updatesAppearance = settings.contains("radiusSmall")
         || settings.contains("radiusMedium")
@@ -1312,3 +1360,41 @@ void ConfigManager::saveSidebarWidth(int width)
 {
     saveSettings(QVariantMap{{"sidebarWidth", width}});
 }
+
+void ConfigManager::saveStarredItems(const QStringList &items)
+{
+    m_starredItems = items;
+
+    const bool wasWatchingConfig = m_watcher.files().contains(m_configPath);
+    if (wasWatchingConfig)
+        m_watcher.removePath(m_configPath);
+
+    toml::table config;
+    if (QFile::exists(m_configPath)) {
+        try {
+            config = toml::parse_file(m_configPath.toStdString());
+        } catch (...) {}
+    }
+
+    toml::array arr;
+    for (const auto &p : items)
+        arr.push_back(p.toStdString());
+    toml::table starredTable{{"paths", std::move(arr)}};
+    config.insert_or_assign("starred", std::move(starredTable));
+
+    writeConfigDocument(m_configPath, config);
+
+    if (QFile::exists(m_configPath)) {
+        m_configModified = QFileInfo(m_configPath).lastModified();
+        m_watcher.addPath(m_configPath);
+    }
+
+    emit starredItemsChanged();
+    emit configChanged();
+}
+
+void ConfigManager::saveHomeStarredPartitionSplitRatio(double ratio)
+{
+    saveSettings(QVariantMap{{"homeStarredPartitionSplitRatio", ratio}});
+}
+
