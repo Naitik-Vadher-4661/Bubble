@@ -81,18 +81,33 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        // App header: "Bubble" + collapse button
+        // App header: "Bubble" logo + title + collapse button
         Item {
             Layout.fillWidth: true
             height: 44
 
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Bubble"
-                color: Theme.text
-                font.pointSize: Theme.fontLarge
-                font.weight: Font.Bold
+            Row {
+                anchors.centerIn: parent
+                spacing: 8
+
+                Image {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 22
+                    height: 22
+                    sourceSize: Qt.size(44, 44)
+                    source: "../images/bubble.svg"
+                    smooth: true
+                    mipmap: true
+                    fillMode: Image.PreserveAspectFit
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Bubble"
+                    color: Theme.text
+                    font.pointSize: Theme.fontLarge
+                    font.weight: Font.Bold
+                }
             }
 
             HoverRect {
@@ -113,7 +128,6 @@ Rectangle {
             Repeater {
                 model: ListModel {
                     ListElement { name: "Home"; iconType: "home" }
-                    ListElement { name: "Starred"; iconType: "star" }
                     ListElement { name: "Recents"; iconType: "clock" }
                     ListElement { name: "Trash"; iconType: "trash" }
                     ListElement { name: "Network"; iconType: "globe" }
@@ -130,7 +144,7 @@ Rectangle {
 
                     readonly property string resolvedPath: {
                         const home = fsModel.homePath()
-                        if (model.name === "Home" || model.name === "Starred") return home
+                        if (model.name === "Home") return home
                         if (model.name === "Recents") return ""
                         if (model.name === "Trash") return root.trashPath
                         if (model.name === "Network") return "network:///"

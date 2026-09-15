@@ -908,7 +908,11 @@ Item {
                     source: (itemData && itemData.icon) ? (itemData.icon === "Star" ? "IconStar.qml" : "../icons/Icon" + itemData.icon + ".qml") : ""
                     onLoaded: {
                         item.size = 16
-                        item.color = Qt.binding(() => itemData && itemData.destructive ? Theme.error : Theme.muted)
+                        item.color = Qt.binding(() => {
+                            if (itemData && itemData.destructive) return Theme.error
+                            if (itemData && itemData.icon === "Star") return Theme.accent
+                            return Theme.muted
+                        })
                     }
                 }
                 Text {
@@ -1038,7 +1042,7 @@ Item {
                     source: (subItemData && subItemData.icon) ? (subItemData.icon === "Star" ? "IconStar.qml" : "../icons/Icon" + subItemData.icon + ".qml") : ""
                     onLoaded: {
                         item.size = 14
-                        item.color = Qt.binding(() => Theme.muted)
+                        item.color = Qt.binding(() => (subItemData && subItemData.icon === "Star") ? Theme.accent : Theme.muted)
                     }
                 }
                 Text {
