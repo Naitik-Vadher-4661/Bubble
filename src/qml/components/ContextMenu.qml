@@ -833,21 +833,6 @@ Item {
         case "copypath": copyPathRequested(targetPath); break
         case "star_toggle":
             starRequested(effectivePaths)
-            if (typeof starredModel !== "undefined" && starredModel) {
-                var allStarred = true
-                for (var s = 0; s < effectivePaths.length; ++s) {
-                    if (!starredModel.isStarred(effectivePaths[s])) {
-                        allStarred = false
-                        break
-                    }
-                }
-                for (var s = 0; s < effectivePaths.length; ++s) {
-                    if (allStarred)
-                        starredModel.unstarPath(effectivePaths[s])
-                    else
-                        starredModel.starPath(effectivePaths[s])
-                }
-            }
             break
         case "rename": renameRequested(targetPath); break
         case "bulkrename": bulkRenameRequested(effectivePaths); break
@@ -920,7 +905,7 @@ Item {
                     Layout.preferredHeight: 16
                     Layout.alignment: Qt.AlignVCenter
                     active: !!(itemData && itemData.icon)
-                    source: (itemData && itemData.icon) ? "../icons/Icon" + itemData.icon + ".qml" : ""
+                    source: (itemData && itemData.icon) ? (itemData.icon === "Star" ? "IconStar.qml" : "../icons/Icon" + itemData.icon + ".qml") : ""
                     onLoaded: {
                         item.size = 16
                         item.color = Qt.binding(() => itemData && itemData.destructive ? Theme.error : Theme.muted)
@@ -980,7 +965,7 @@ Item {
                     Layout.preferredHeight: 16
                     Layout.alignment: Qt.AlignVCenter
                     active: !!(itemData && itemData.icon)
-                    source: (itemData && itemData.icon) ? "../icons/Icon" + itemData.icon + ".qml" : ""
+                    source: (itemData && itemData.icon) ? (itemData.icon === "Star" ? "IconStar.qml" : "../icons/Icon" + itemData.icon + ".qml") : ""
                     onLoaded: {
                         item.size = 16
                         item.color = Qt.binding(() => submenuTrigger.isActive ? Theme.text : Theme.muted)
@@ -1050,7 +1035,7 @@ Item {
                     Layout.preferredHeight: 14
                     Layout.alignment: Qt.AlignVCenter
                     active: !!(subItemData && subItemData.icon)
-                    source: (subItemData && subItemData.icon) ? "../icons/Icon" + subItemData.icon + ".qml" : ""
+                    source: (subItemData && subItemData.icon) ? (subItemData.icon === "Star" ? "IconStar.qml" : "../icons/Icon" + subItemData.icon + ".qml") : ""
                     onLoaded: {
                         item.size = 14
                         item.color = Qt.binding(() => Theme.muted)
