@@ -31,6 +31,8 @@ public:
     explicit FileOperations(QObject *parent = nullptr);
     ~FileOperations() override;
 
+    void setVaultPurgeCallback(std::function<void(const QString &)> callback);
+
     bool busy() const;
     double progress() const;
     QString statusText() const;
@@ -182,4 +184,5 @@ private:
     int m_nextTransferId = 1;
     QByteArray m_processErrorOutput;
     QStringList m_pendingChangedPaths;
+    std::function<void(const QString &)> m_purgeCallback;
 };

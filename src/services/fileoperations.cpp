@@ -1074,6 +1074,11 @@ FileOperations::~FileOperations()
     m_activeTransfers.clear();
 }
 
+void FileOperations::setVaultPurgeCallback(std::function<void(const QString &)> callback)
+{
+    m_purgeCallback = std::move(callback);
+}
+
 bool FileOperations::busy() const { return m_busy; }
 double FileOperations::progress() const { return m_progress; }
 QString FileOperations::statusText() const { return m_statusText; }
@@ -1193,6 +1198,12 @@ int FileOperations::moveResolvedItems(const QVariantList &operations)
 
 int FileOperations::trashFiles(const QStringList &paths)
 {
+    if (m_purgeCallback) {
+        for (const QString &p : paths) {
+            m_purgeCallback(normalizeLocation(p));
+        }
+    }
+
     return startSimpleOperation(
         QString("Trashing %1 item(s)...").arg(paths.size()), paths,
         [paths](ProgressReporter report) -> QString {
@@ -1381,6 +1392,12 @@ QString FileOperations::uniqueNameForDestination(const QString &destinationDir, 
 
 int FileOperations::deleteFiles(const QStringList &paths)
 {
+    if (m_purgeCallback) {
+        for (const QString &p : paths) {
+            m_purgeCallback(normalizeLocation(p));
+        }
+    }
+
     return startSimpleOperation(
         QString("Deleting %1 item(s)...").arg(paths.size()), paths,
         [paths](ProgressReporter report) -> QString {

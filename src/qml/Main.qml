@@ -2762,7 +2762,14 @@ ApplicationWindow {
         dialogWidth: 360
         title: "Permanently Delete?"
         initialFocusItem: cancelDeleteButton
-        onAccepted: fileOps.deleteFiles(root.deleteConfirmPaths)
+        onAccepted: {
+            if (typeof vault !== "undefined" && vault) {
+                for (var i = 0; i < root.deleteConfirmPaths.length; ++i) {
+                    vault.purgePath(root.deleteConfirmPaths[i])
+                }
+            }
+            fileOps.deleteFiles(root.deleteConfirmPaths)
+        }
 
         Text {
             Layout.fillWidth: true

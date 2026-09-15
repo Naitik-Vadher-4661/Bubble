@@ -530,6 +530,9 @@ int main(int argc, char *argv[])
     splitFsModel->setGitStatusService(secondaryGitService);
 
     VaultService *vaultService = new VaultService(configDir, &app);
+    fileOps->setVaultPurgeCallback([vaultService](const QString &path) {
+        vaultService->purgePath(path);
+    });
     fsModel->setVaultService(vaultService);
     splitFsModel->setVaultService(vaultService);
     millerParentModel->setVaultService(vaultService);

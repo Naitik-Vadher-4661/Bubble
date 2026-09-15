@@ -48,6 +48,10 @@ public:
     Q_INVOKABLE QString lastError() const;
     Q_INVOKABLE void clearLastError();
 
+    // Deletion and cleanup
+    Q_INVOKABLE void purgePath(const QString &path);
+    Q_INVOKABLE void purgePaths(const QStringList &paths);
+
 signals:
     void itemLocked(const QString &path);
     void itemUnlocked(const QString &path);

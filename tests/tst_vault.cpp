@@ -25,6 +25,7 @@ private slots:
     void testVaultServiceBruteForceRateLimit();
     void testVaultServiceGhostEntryOnRecreation();
     void testVaultServiceTamperDetection();
+    void testVaultServiceFolderRecreationPermissionDeniedBug();
 };
 
 void TestVault::testCryptoEngineHashVerify()
@@ -600,6 +601,64 @@ void TestVault::testVaultServiceTamperDetection()
     // Attempting to change password on tampered file should also be rejected
     QVERIFY(!vault.changePassword(testFile, "LockPassword123", "NewSecretPass456"));
     QVERIFY(vault.lastError().contains("Tampering detected"));
+}
+
+void TestVault::testVaultServiceFolderRecreationPermissionDeniedBug()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    QString configDir = tempDir.filePath("config");
+    QString testDir = tempDir.filePath("test");
+
+    // 1. Create directory 'test'
+    QVERIFY(QDir().mkpath(testDir));
+
+    VaultService vault(configDir);
+
+    // 2. Lock directory with password "22"
+    QVERIFY(vault.lockItem(testDir, "22"));
+    QVERIFY(vault.isLocked(testDir));
+
+    // 3. Unlock directory in session mode with password "22" (as Bubble does before delete)
+    QVERIFY(vault.sessionUnlockFolder(testDir, "22"));
+    QVERIFY(vault.isSessionUnlocked(testDir));
+
+    // 4. Delete directory and purge vault state
+    vault.purgePath(testDir);
+    QVERIFY(QDir(testDir).removeRecursively());
+    QVERIFY(!QDir(testDir).exists());
+    QVERIFY(!vault.isLocked(testDir));
+    QVERIFY(!vault.isSessionUnlocked(testDir));
+
+    // 5. Recreate directory 'test' at the exact same path
+    QVERIFY(QDir().mkpath(testDir));
+
+    // 6. Lock recreated directory with new password "11"
+    QVERIFY(vault.lockItem(testDir, "11"));
+    QVERIFY(vault.isLocked(testDir));
+
+    // 7. Go into folder with password "11"
+    QVERIFY(vault.sessionUnlockFolder(testDir, "11"));
+    QVERIFY(vault.isSessionUnlocked(testDir));
+
+    // 8. Verify we can create a file and directory inside without permission denied
+    QString innerFile = testDir + "/sample.txt";
+    QFile f(innerFile);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write("test content inside recreated folder");
+    f.close();
+    QVERIFY(QFile::exists(innerFile));
+
+    QString innerDir = testDir + "/subfolder";
+    QVERIFY(QDir().mkpath(innerDir));
+    QVERIFY(QDir(innerDir).exists());
+
+    // 9. Relock folder and verify
+    vault.sessionRelockFolder(testDir);
+    QVERIFY(!vault.isSessionUnlocked(testDir));
+
+    // 10. Permanently unlock before cleanup so QTemporaryDir can delete files cleanly
+    QVERIFY(vault.unlockItem(testDir, "11"));
 }
 
 QTEST_MAIN(TestVault)

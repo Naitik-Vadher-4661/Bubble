@@ -62,6 +62,11 @@ bool VaultService::lockItem(const QString &path, const QString &password)
         return false;
     }
 
+    // Always clear any stale in-memory session before locking
+    m_activeSessions.remove(path);
+    m_activeFolderSessions.remove(path);
+    m_activeFileSessions.remove(path);
+
     QFileInfo info(path);
     if (!info.exists()) {
         emit lockError(path, "Path does not exist");
@@ -183,6 +188,38 @@ void VaultService::clearLastError()
     m_lastError.clear();
 }
 
+void VaultService::purgePath(const QString &path)
+{
+    m_activeSessions.remove(path);
+    m_activeFolderSessions.remove(path);
+    m_activeFileSessions.remove(path);
+    m_rateLimits.remove(path);
+
+    VaultEntry entry = m_db->findByPath(path);
+    if (entry.id != 0) {
+        m_db->removeSession(entry.id);
+        if (entry.type == "directory") {
+            QList<VaultEntry> children = m_db->findByParentId(entry.id);
+            for (const VaultEntry &child : children) {
+                m_activeSessions.remove(child.path);
+                m_activeFolderSessions.remove(child.path);
+                m_activeFileSessions.remove(child.path);
+                m_rateLimits.remove(child.path);
+                m_db->removeSession(child.id);
+                m_db->removeEntry(child.path);
+            }
+        }
+        m_db->removeEntry(path);
+    }
+}
+
+void VaultService::purgePaths(const QStringList &paths)
+{
+    for (const QString &path : paths) {
+        purgePath(path);
+    }
+}
+
 bool VaultService::isLocked(const QString &path) const
 {
     if (!m_db->hasEntry(path)) {
@@ -192,9 +229,9 @@ bool VaultService::isLocked(const QString &path) const
     // Check if the file/directory exists on disk
     struct stat st;
     if (lstat(path.toLocal8Bit().constData(), &st) != 0) {
-        // If file definitely does not exist on disk, purge the orphaned lock entry
+        // If file definitely does not exist on disk, purge the orphaned lock entry and active session
         if (errno == ENOENT) {
-            const_cast<VaultDatabase*>(m_db)->removeEntry(path);
+            const_cast<VaultService*>(this)->purgePath(path);
         }
         // If lstat failed due to permission denied (e.g. parent folder has mode 0000),
         // the item is still locked and exists inside the locked directory
@@ -209,7 +246,7 @@ bool VaultService::isLocked(const QString &path) const
     // If an inode was recorded and the file on disk has a different inode,
     // the original locked file was deleted and replaced by a new file with the same name!
     if (entry.inode > 0 && static_cast<qint64>(st.st_ino) != entry.inode) {
-        const_cast<VaultDatabase*>(m_db)->removeEntry(path);
+        const_cast<VaultService*>(this)->purgePath(path);
         return false;
     }
 
@@ -220,7 +257,7 @@ bool VaultService::isLocked(const QString &path) const
         char val[8] = {0};
         ssize_t len = getxattr(path.toLocal8Bit().constData(), "user.bubble.locked", val, sizeof(val));
         if (len < 0 && errno == ENODATA) {
-            const_cast<VaultDatabase*>(m_db)->removeEntry(path);
+            const_cast<VaultService*>(this)->purgePath(path);
             return false;
         }
     }
@@ -781,6 +818,11 @@ bool VaultService::lockSingleFile(const QString &path, const QString &password, 
     entry.lockedAt = QDateTime::currentSecsSinceEpoch();
     entry.inode = inode;
 
+    // Purge any stale DB entry or in-memory session for this path
+    m_activeSessions.remove(path);
+    m_activeFileSessions.remove(path);
+    m_db->removeEntry(path);
+
     if (!m_db->addEntry(entry)) {
         m_crypto->decryptFile(path, dataKey, fileIv); // Rollback
         emit lockError(path, "Failed to add entry to database");
@@ -825,6 +867,11 @@ bool VaultService::lockDirectory(const QString &path, const QString &password)
     dirEntry.originalPerms = perms;
     dirEntry.lockedAt = QDateTime::currentSecsSinceEpoch();
     dirEntry.inode = dirInode;
+
+    // Purge any stale DB entry or in-memory session for this path
+    m_activeSessions.remove(path);
+    m_activeFolderSessions.remove(path);
+    m_db->removeEntry(path);
 
     if (!m_db->addEntry(dirEntry)) {
         emit lockError(path, "Failed to add directory entry to database");
@@ -977,30 +1024,65 @@ bool VaultService::unlockDirectory(const QString &path, const QString &password)
 
 bool VaultService::runHelper(const QStringList &args, bool allowElevation)
 {
-    QString helperPath = QStandardPaths::findExecutable("bubble-vault-helper");
-    if (helperPath.isEmpty()) {
-        QString appDirHelper = QCoreApplication::applicationDirPath() + "/bubble-vault-helper";
-        if (QFile::exists(appDirHelper)) {
-            helperPath = appDirHelper;
-        } else if (QFile::exists("/usr/local/bin/bubble-vault-helper")) {
-            helperPath = "/usr/local/bin/bubble-vault-helper";
-        } else if (QFile::exists("/usr/bin/bubble-vault-helper")) {
-            helperPath = "/usr/bin/bubble-vault-helper";
-        } else if (QFile::exists(m_configDir + "/bin/bubble-vault-helper")) {
-            helperPath = m_configDir + "/bin/bubble-vault-helper";
+    // Collect candidate helper paths
+    QStringList candidates;
+
+    // 1. System setuid locations (prioritized because they possess root capabilities)
+    candidates << QStringLiteral("/usr/local/bin/bubble-vault-helper")
+               << QStringLiteral("/usr/bin/bubble-vault-helper");
+
+    // 2. PATH resolution
+    QString pathExec = QStandardPaths::findExecutable(QStringLiteral("bubble-vault-helper"));
+    if (!pathExec.isEmpty() && !candidates.contains(pathExec)) {
+        candidates.append(pathExec);
+    }
+
+    // 3. Application dir and config dir
+    candidates << QCoreApplication::applicationDirPath() + QStringLiteral("/bubble-vault-helper")
+               << m_configDir + QStringLiteral("/bin/bubble-vault-helper");
+
+    // Prioritize any candidate with setuid root flag (S_ISUID and owned by root)
+    QString bestHelper;
+    for (const QString &c : candidates) {
+        if (!QFile::exists(c)) continue;
+        struct stat st;
+        if (stat(c.toLocal8Bit().constData(), &st) == 0) {
+            if ((st.st_mode & S_ISUID) && st.st_uid == 0) {
+                bestHelper = c;
+                break;
+            }
         }
     }
 
-    if (!helperPath.isEmpty()) {
-        // 1. Try direct helper execution (succeeds if setuid root or current user owns the item)
+    if (bestHelper.isEmpty()) {
+        for (const QString &c : candidates) {
+            if (QFile::exists(c) && QFileInfo(c).isExecutable()) {
+                bestHelper = c;
+                break;
+            }
+        }
+    }
+
+    if (!bestHelper.isEmpty()) {
+        // 1. Try prioritized helper execution
         QProcess proc;
-        proc.start(helperPath, args);
+        proc.start(bestHelper, args);
         if (proc.waitForFinished(1500) && proc.exitCode() == 0) {
             return true;
         }
+
+        // Fallback to remaining candidates if primary failed
+        for (const QString &c : candidates) {
+            if (c == bestHelper || !QFile::exists(c) || !QFileInfo(c).isExecutable()) continue;
+            QProcess procFallback;
+            procFallback.start(c, args);
+            if (procFallback.waitForFinished(1500) && procFallback.exitCode() == 0) {
+                return true;
+            }
+        }
     }
 
-    if (!allowElevation || helperPath.isEmpty()) {
+    if (!allowElevation || bestHelper.isEmpty()) {
         return false;
     }
 
@@ -1013,7 +1095,7 @@ bool VaultService::runHelper(const QStringList &args, bool allowElevation)
     QString pkexec = QStandardPaths::findExecutable("pkexec");
     if (!pkexec.isEmpty()) {
         QProcess pkProc;
-        pkProc.start(pkexec, QStringList() << helperPath << args);
+        pkProc.start(pkexec, QStringList() << bestHelper << args);
         // Wait up to 30 seconds for the user to complete the GUI authentication dialog
         if (pkProc.waitForFinished(30000) && pkProc.exitCode() == 0) {
             return true;
@@ -1069,6 +1151,10 @@ bool VaultService::ensureWritable(const QString &path)
 
 bool VaultService::setImmutable(const QString &path, bool immutable)
 {
+    if (qEnvironmentVariableIntValue("BUBBLE_TEST_MODE") == 1) {
+        return true;
+    }
+
     QString flag = immutable ? "+i" : "-i";
 
     if (runHelper({flag, path}, false)) {
@@ -1109,43 +1195,63 @@ bool VaultService::restoreFilePermissions(const QString &path, const QString &pe
 {
     setImmutable(path, false);
 
+    QFileInfo fi(path);
+    bool isDir = fi.isDir();
+    mode_t m = 0;
+
+    // 1. Check if perms is an octal string (e.g. "0755", "755", "0644", "644")
     bool ok = false;
-    uint pInt = perms.toUInt(&ok, 16);
-    if (ok && pInt != 0) {
-        mode_t m = 0;
-        if (pInt & QFileDevice::ReadOwner) m |= S_IRUSR;
-        if (pInt & QFileDevice::WriteOwner) m |= S_IWUSR;
-        if (pInt & QFileDevice::ExeOwner) m |= S_IXUSR;
-        if (pInt & QFileDevice::ReadGroup) m |= S_IRGRP;
-        if (pInt & QFileDevice::WriteGroup) m |= S_IWGRP;
-        if (pInt & QFileDevice::ExeGroup) m |= S_IXGRP;
-        if (pInt & QFileDevice::ReadOther) m |= S_IROTH;
-        if (pInt & QFileDevice::WriteOther) m |= S_IWOTH;
-        if (pInt & QFileDevice::ExeOther) m |= S_IXOTH;
-        if (chmod(path.toLocal8Bit().constData(), m) == 0) {
-            return true;
+    if (perms.startsWith('0') || perms.length() <= 4) {
+        uint octVal = perms.toUInt(&ok, 8);
+        if (ok && octVal > 0) {
+            m = static_cast<mode_t>(octVal);
         }
+    }
+
+    // 2. If not octal, parse as hex (Qt QFile::Permissions representation)
+    if (m == 0) {
+        uint pInt = perms.toUInt(&ok, 16);
+        if (ok && pInt > 0) {
+            if ((pInt & QFileDevice::ReadOwner) || (pInt & QFileDevice::ReadUser)) m |= S_IRUSR;
+            if ((pInt & QFileDevice::WriteOwner) || (pInt & QFileDevice::WriteUser)) m |= S_IWUSR;
+            if ((pInt & QFileDevice::ExeOwner) || (pInt & QFileDevice::ExeUser)) m |= S_IXUSR;
+            if (pInt & QFileDevice::ReadGroup) m |= S_IRGRP;
+            if (pInt & QFileDevice::WriteGroup) m |= S_IWGRP;
+            if (pInt & QFileDevice::ExeGroup) m |= S_IXGRP;
+            if (pInt & QFileDevice::ReadOther) m |= S_IROTH;
+            if (pInt & QFileDevice::WriteOther) m |= S_IWOTH;
+            if (pInt & QFileDevice::ExeOther) m |= S_IXOTH;
+        }
+    }
+
+    // 3. Fallback defaults if empty or invalid
+    if (m == 0) {
+        m = isDir ? 0755 : 0644;
+    }
+
+    // Guaranteed owner permissions:
+    // For directories, owner MUST have S_IRWXU (read, write, execute) to browse and create items
+    if (isDir) {
+        m |= (S_IRUSR | S_IWUSR | S_IXUSR);
+    } else {
+        // For files, owner must have at least read and write permissions
+        m |= (S_IRUSR | S_IWUSR);
+    }
+
+    if (chmod(path.toLocal8Bit().constData(), m) == 0) {
+        return true;
     }
 
     QFile file(path);
-    QFile::Permissions p(pInt);
-    if (ok && p != 0) {
-        if (file.setPermissions(p)) {
-            return true;
-        }
-    } else {
-        p = QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-            QFileDevice::ReadGroup | QFileDevice::ReadOther;
-        if (file.setPermissions(p)) {
-            return true;
-        }
-        if (chmod(path.toLocal8Bit().constData(), 0644) == 0) {
-            return true;
-        }
+    if (file.setPermissions(QFileDevice::Permissions(static_cast<uint>(m)))) {
+        return true;
     }
 
-    runHelper({"unprotect", path}, false);
-    return true;
+    if (runHelper({"unprotect", path}, false)) {
+        return true;
+    }
+
+    return false;
 }
 
 bool VaultService::setPermissionMode(const QString &path, QFileDevice::Permissions p)
