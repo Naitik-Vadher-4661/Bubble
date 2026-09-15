@@ -153,6 +153,7 @@ Window {
     Component { id: layoutSectionIcon; IconPanelLeft {} }
     Component { id: motionSectionIcon; IconClock {} }
     Component { id: toolsSectionIcon; IconFolder {} }
+    Component { id: starSectionIcon; IconStar { size: 16 } }
 
     property int currentSectionIndex: 0
     readonly property bool compactNavigation: dialogWidth < 860
@@ -160,13 +161,15 @@ Window {
         { title: "Look & Feel", iconComponent: paletteSectionIcon },
         { title: "Layout", iconComponent: layoutSectionIcon },
         { title: "Motion", iconComponent: motionSectionIcon },
-        { title: "Tools", iconComponent: toolsSectionIcon }
+        { title: "Tools", iconComponent: toolsSectionIcon },
+        { title: "Starred", iconComponent: starSectionIcon }
     ]
     readonly property var sectionItems: [
         { title: "Look & Feel", subtitle: "Theme, typography, icons, and surface styling.", iconComponent: paletteSectionIcon },
         { title: "Layout", subtitle: "Sidebar behavior, file visibility, and toolbar controls.", iconComponent: layoutSectionIcon },
         { title: "Motion", subtitle: "Animation timing and easing across the interface.", iconComponent: motionSectionIcon },
-        { title: "Tools", subtitle: "Shortcuts, remote locations, and config behavior.", iconComponent: toolsSectionIcon }
+        { title: "Tools", subtitle: "Shortcuts, remote locations, and config behavior.", iconComponent: toolsSectionIcon },
+        { title: "Starred", subtitle: "Home dual-partition layout, orientation, and starred items management.", iconComponent: starSectionIcon }
     ]
 
     function showSection(index) {
@@ -859,36 +862,6 @@ Window {
                 }
             }
 
-            Text {
-                text: "Home Starred Partition"
-                color: Theme.accent
-                font.pointSize: Theme.fontSmall
-                font.bold: true
-                Layout.topMargin: 12
-                Layout.bottomMargin: 4
-            }
-
-            Q.Toggle {
-                Layout.fillWidth: true
-                label: "Starred partition on Home"
-                checked: root.draftHomeStarredPartitionEnabled
-                onToggled: (value) => {
-                    root.draftHomeStarredPartitionEnabled = value
-                    root.applySettingsNow()
-                }
-            }
-
-            Q.Dropdown {
-                Layout.fillWidth: true
-                label: "Partition orientation"
-                enabled: root.draftHomeStarredPartitionEnabled
-                model: ["Side-by-Side (Left / Right)", "Stacked (Top / Bottom)"]
-                currentIndex: root.draftHomeStarredPartitionOrientation === "stacked" ? 1 : 0
-                onSelected: (index, _) => {
-                    root.draftHomeStarredPartitionOrientation = index === 1 ? "stacked" : "side_by_side"
-                    root.applySettingsNow()
-                }
-            }
 
             Text {
                 text: "Window Controls"
@@ -1183,6 +1156,242 @@ Window {
         }
     }
 
+    Component {
+        id: starPageComponent
+
+        ColumnLayout {
+            width: pageLoader.width
+            spacing: 12
+
+            Text {
+                text: "Home Dual-Partition"
+                color: Theme.accent
+                font.pointSize: Theme.fontSmall
+                font.bold: true
+                Layout.bottomMargin: 2
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "When visiting your Home directory, Bubble can display a dedicated partitioned panel for quick access and drag-and-drop pinning to your Starred collection."
+                color: Theme.subtext
+                font.pointSize: Theme.fontSmall
+                wrapMode: Text.WordWrap
+            }
+
+            Q.Toggle {
+                Layout.fillWidth: true
+                label: "Enable Starred partition on Home"
+                checked: root.draftHomeStarredPartitionEnabled
+                onToggled: (value) => {
+                    root.draftHomeStarredPartitionEnabled = value
+                    root.applySettingsNow()
+                }
+            }
+
+            Q.Dropdown {
+                Layout.fillWidth: true
+                label: "Partition orientation"
+                enabled: root.draftHomeStarredPartitionEnabled
+                model: ["Side-by-Side (Left / Right)", "Stacked (Top / Bottom)"]
+                currentIndex: root.draftHomeStarredPartitionOrientation === "stacked" ? 1 : 0
+                onSelected: (index, _) => {
+                    root.draftHomeStarredPartitionOrientation = index === 1 ? "stacked" : "side_by_side"
+                    root.applySettingsNow()
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Q.Button {
+                    text: "Reset Split Ratio (50/50)"
+                    enabled: root.draftHomeStarredPartitionEnabled
+                    variant: "ghost"
+                    onClicked: {
+                        config.saveHomeStarredPartitionSplitRatio(0.5)
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: root.sectionBorderColor
+                Layout.topMargin: 6
+                Layout.bottomMargin: 6
+            }
+
+            // Starred items management
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                IconStar {
+                    size: 18
+                }
+
+                Text {
+                    text: "Starred Items"
+                    color: Theme.accent
+                    font.pointSize: Theme.fontSmall
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    implicitWidth: countBadgeText.implicitWidth + 12
+                    implicitHeight: 20
+                    radius: 10
+                    color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.15)
+
+                    Text {
+                        id: countBadgeText
+                        anchors.centerIn: parent
+                        text: (typeof starredModel !== "undefined" && starredModel ? starredModel.count : 0) + " items"
+                        font.pointSize: Theme.fontSmall - 1
+                        font.bold: true
+                        color: Theme.accent
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Q.Button {
+                    text: "Clean Missing Items"
+                    variant: "ghost"
+                    enabled: (typeof starredModel !== "undefined" && starredModel) ? starredModel.hasMissing : false
+                    onClicked: {
+                        if (typeof starredModel !== "undefined" && starredModel)
+                            starredModel.clearMissing()
+                    }
+                }
+
+                Q.Button {
+                    text: "Clear All"
+                    variant: "ghost"
+                    enabled: (typeof starredModel !== "undefined" && starredModel) ? starredModel.count > 0 : false
+                    onClicked: {
+                        if (typeof starredModel !== "undefined" && starredModel)
+                            starredModel.clearAll()
+                    }
+                }
+            }
+
+            // List of starred items or empty placeholder
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: (typeof starredModel !== "undefined" && starredModel && starredModel.count > 0)
+                    ? Math.min(220, itemsColumn.implicitHeight + 16)
+                    : 70
+                radius: Theme.radiusMedium
+                color: Theme.containerColor(Theme.surface, 0.22)
+                border.width: 1
+                border.color: root.sectionBorderColor
+                clip: true
+
+                // Empty state
+                Item {
+                    anchors.fill: parent
+                    visible: !(typeof starredModel !== "undefined" && starredModel && starredModel.count > 0)
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "No starred files or folders yet.\nRight-click any file or folder and choose 'Star' to pin it."
+                        horizontalAlignment: Text.AlignHCenter
+                        color: Theme.muted
+                        font.pointSize: Theme.fontSmall
+                    }
+                }
+
+                // Scrollable list if items exist
+                Flickable {
+                    id: itemsFlickable
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    contentWidth: width
+                    contentHeight: itemsColumn.implicitHeight
+                    clip: true
+                    visible: typeof starredModel !== "undefined" && starredModel && starredModel.count > 0
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    ColumnLayout {
+                        id: itemsColumn
+                        width: parent.width
+                        spacing: 4
+
+                        Repeater {
+                            model: (typeof starredModel !== "undefined" && starredModel) ? starredModel : null
+
+                            delegate: Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: 32
+                                radius: Theme.radiusSmall
+                                color: itemHover.hovered ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08) : "transparent"
+
+                                HoverHandler { id: itemHover }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    spacing: 8
+
+                                    IconStar {
+                                        size: 14
+                                    }
+
+                                    Text {
+                                        text: model.fileName || model.filePath || ""
+                                        color: model.exists ? Theme.text : Theme.error
+                                        font.pointSize: Theme.fontSmall
+                                        font.bold: true
+                                        Layout.preferredWidth: Math.min(180, implicitWidth)
+                                        elide: Text.ElideMiddle
+                                    }
+
+                                    Text {
+                                        text: model.filePath || ""
+                                        color: Theme.muted
+                                        font.pointSize: Theme.fontSmall - 1
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideMiddle
+                                    }
+
+                                    Rectangle {
+                                        width: 22
+                                        height: 22
+                                        radius: 4
+                                        color: removeHover.hovered ? Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, 0.2) : "transparent"
+
+                                        IconX {
+                                            anchors.centerIn: parent
+                                            size: 12
+                                            color: removeHover.hovered ? Theme.error : Theme.muted
+                                        }
+
+                                        HoverHandler { id: removeHover }
+                                        TapHandler {
+                                            onTapped: {
+                                                if (typeof starredModel !== "undefined" && starredModel) {
+                                                    starredModel.removeAt(index)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Item {
         id: pageContainer
         anchors.fill: parent
@@ -1340,7 +1549,9 @@ Window {
                                             ? layoutPageComponent
                                             : root.currentSectionIndex === 2
                                                 ? motionPageComponent
-                                                : toolsPageComponent
+                                                : root.currentSectionIndex === 3
+                                                    ? toolsPageComponent
+                                                    : starPageComponent
                                 }
                             }
                         }

@@ -191,6 +191,20 @@ void StarredModel::clearMissing()
     }
 }
 
+void StarredModel::clearAll()
+{
+    if (m_entries.isEmpty())
+        return;
+
+    beginResetModel();
+    m_entries.clear();
+    endResetModel();
+
+    emit countChanged();
+    emit hasMissingChanged();
+    emit starredChanged();
+}
+
 void StarredModel::moveStarred(int from, int to)
 {
     if (from < 0 || from >= m_entries.size() || to < 0 || to >= m_entries.size() || from == to)
@@ -285,10 +299,14 @@ StarredModel::StarredEntry StarredModel::makeEntry(const QString &rawPath) const
 QString StarredModel::expandPath(const QString &path)
 {
     const QUrl url(path);
-    if (url.isValid() && !url.scheme().isEmpty() && url.scheme() != QStringLiteral("file"))
-        return url.toString(QUrl::FullyEncoded);
+    if (url.isValid() && !url.scheme().isEmpty()) {
+        if (url.scheme() == QStringLiteral("file"))
+            return QDir::cleanPath(url.toLocalFile());
+        if (url.scheme() != QStringLiteral("trash"))
+            return url.toString(QUrl::FullyEncoded);
+    }
     if (path.startsWith(QLatin1String("~/")))
-        return QDir::homePath() + path.mid(1);
+        return QDir::cleanPath(QDir::homePath() + path.mid(1));
     return QDir::cleanPath(path);
 }
 

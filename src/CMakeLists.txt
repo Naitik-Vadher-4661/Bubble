@@ -104,6 +104,7 @@ list(APPEND bubble_qml_module_args
         qml/components/KeyboardShortcutsDialog.qml
         qml/components/MissingDependenciesDialog.qml
         qml/components/SettingsPanel.qml
+        qml/components/IconStar.qml
         qml/components/PreviewLoader.qml
         qml/components/QuickPreview.qml
         qml/components/Toast.qml
@@ -210,7 +211,6 @@ list(APPEND bubble_qml_module_args
         qml/icons/IconSlidersH.qml
         qml/icons/IconSquare.qml
         qml/icons/IconSquareSplitHorizontal.qml
-        qml/icons/IconStar.qml
         qml/icons/IconStrikethrough.qml
         qml/icons/IconSun.qml
         qml/icons/IconTerminal.qml

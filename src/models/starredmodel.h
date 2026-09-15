@@ -38,6 +38,7 @@ public:
     Q_INVOKABLE bool isStarred(const QString &path) const;
     Q_INVOKABLE void removeAt(int index);
     Q_INVOKABLE void clearMissing();
+    Q_INVOKABLE void clearAll();
     Q_INVOKABLE void moveStarred(int from, int to);
     Q_INVOKABLE void refresh();
 
