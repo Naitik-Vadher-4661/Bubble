@@ -235,6 +235,8 @@ list(APPEND bubble_qml_module_args
         qml/icons/IconZap.qml
         qml/icons/IconZoomIn.qml
         qml/icons/IconZoomOut.qml
+    RESOURCES
+        qml/images/bubble.svg
 )
 
 qt_add_qml_module(bubble ${bubble_qml_module_args})
